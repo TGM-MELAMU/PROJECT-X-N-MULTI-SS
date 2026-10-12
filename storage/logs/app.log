@@ -1,0 +1,2 @@
+[2026-10-08 18:58:02] ERROR: Unhandled exception {"type":"ErrorException","message":"The use statement with non-compound name 'Throwable' has no effect","file":"C:\\xampp\\htdocs\\MultiSS\\backend\\routes\\api.php","line":11}
+[2026-10-08 18:59:45] ERROR: Unhandled exception {"type":"ErrorException","message":"The use statement with non-compound name 'Throwable' has no effect","file":"C:\\xampp\\htdocs\\MultiSS\\backend\\routes\\api.php","line":11}
