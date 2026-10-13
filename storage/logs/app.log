@@ -1,2 +1,6 @@
 [2026-10-08 18:58:02] ERROR: Unhandled exception {"type":"ErrorException","message":"The use statement with non-compound name 'Throwable' has no effect","file":"C:\\xampp\\htdocs\\MultiSS\\backend\\routes\\api.php","line":11}
 [2026-10-08 18:59:45] ERROR: Unhandled exception {"type":"ErrorException","message":"The use statement with non-compound name 'Throwable' has no effect","file":"C:\\xampp\\htdocs\\MultiSS\\backend\\routes\\api.php","line":11}
+[2026-10-13 02:24:06] WARNING: Resent verification email could not be sent. {"exception":"RuntimeException","message":"Email service is not configured."}
+[2026-10-13 13:05:02] WARNING: Password reset email could not be sent. {"exception":"RuntimeException","message":"Email service is not configured."}
+[2026-10-13 13:32:39] ERROR: Unhandled exception {"type":"Error","message":"Typed property MultiSS\\Controllers\\AuthController::$resetPasswordService must not be accessed before initialization","file":"C:\\xampp\\htdocs\\MultiSS\\backend\\app\\Controllers\\AuthController.php","line":325}
+[2026-10-13 14:03:01] WARNING: Verification email could not be sent. {"user_id":19,"exception":"RuntimeException","message":"Email service is not configured."}
