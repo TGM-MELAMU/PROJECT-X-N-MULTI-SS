@@ -10,45 +10,111 @@ use MultiSS\Core\Session;
 
 final class CsrfMiddleware
 {
-    private const SESSION_KEY = 'csrf_token';
+    private const SESSION_KEY =
+        'csrf_token';
+
+    /*
+     * Server-to-server webhook endpoints do not
+     * use the customer's cookie session and
+     * therefore must not require browser CSRF.
+     *
+     * Keep this list exact and minimal.
+     */
+    private const EXEMPT_PATHS = [
+        '/api/v1/payments/payfast/notify',
+    ];
 
     public static function token(): string
     {
-        $token = Session::get(self::SESSION_KEY);
+        $token =
+            Session::get(
+                self::SESSION_KEY
+            );
 
-        if (!is_string($token) || $token === '') {
-            $token = bin2hex(random_bytes(32));
+        if (
+            !is_string($token)
+            || $token === ''
+        ) {
+            $token =
+                bin2hex(
+                    random_bytes(32)
+                );
 
-            Session::set(self::SESSION_KEY, $token);
+            Session::set(
+                self::SESSION_KEY,
+                $token
+            );
         }
 
         return $token;
     }
 
-    public static function validate(Request $request): void
-    {
+    public static function validate(
+        Request $request
+    ): void {
+        /*
+         * Read-only requests do not require CSRF.
+         */
         if (
             in_array(
                 $request->method(),
-                ['GET', 'HEAD', 'OPTIONS'],
+                [
+                    'GET',
+                    'HEAD',
+                    'OPTIONS',
+                ],
                 true
             )
         ) {
             return;
         }
 
-        $sessionToken = Session::get(self::SESSION_KEY);
+        /*
+         * PayFast ITN is server-to-server.
+         *
+         * It is protected separately by:
+         * - PayFast signature verification
+         * - merchant verification
+         * - source verification
+         * - amount verification
+         * - PayFast server confirmation
+         *
+         * Only POST requests to an explicitly
+         * whitelisted webhook path bypass CSRF.
+         */
+        if (
+            $request->method() === 'POST'
+            && in_array(
+                $request->path(),
+                self::EXEMPT_PATHS,
+                true
+            )
+        ) {
+            return;
+        }
 
-        $requestToken = $request->header('X-CSRF-Token');
+        $sessionToken =
+            Session::get(
+                self::SESSION_KEY
+            );
+
+        $requestToken =
+            $request->header(
+                'X-CSRF-Token'
+            );
 
         if (
-            !is_string($sessionToken) ||
-            !is_string($requestToken) ||
-            !hash_equals($sessionToken, $requestToken)
+            !is_string($sessionToken)
+            || !is_string($requestToken)
+            || !hash_equals(
+                $sessionToken,
+                $requestToken
+            )
         ) {
             Response::json([
                 'success' => false,
-                'message' => 'Invalid CSRF token',
+                'message' =>
+                    'Invalid CSRF token',
             ], 403);
 
             exit;

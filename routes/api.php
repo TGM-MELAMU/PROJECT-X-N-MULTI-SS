@@ -1,7 +1,8 @@
 <?php
 
 declare(strict_types=1);
-
+use MultiSS\Controllers\PaymentController;
+use MultiSS\Controllers\CartController;
 use MultiSS\Controllers\AdminProductController;
 use MultiSS\Controllers\AuthController;
 use MultiSS\Controllers\CategoryController;
@@ -15,6 +16,9 @@ use MultiSS\Core\Router;
 use MultiSS\Middleware\AuthMiddleware;
 use MultiSS\Middleware\CsrfMiddleware;
 use MultiSS\Middleware\RoleMiddleware;
+use MultiSS\Controllers\AddressController;
+use MultiSS\Controllers\CheckoutController;
+use MultiSS\Controllers\OrderController;
 
 /** @var Router $router */
 
@@ -120,6 +124,213 @@ $router->get(
             'csrf_token' =>
                 CsrfMiddleware::token(),
         ], 200);
+    }
+);
+/*
+|--------------------------------------------------------------------------
+| Cart
+|--------------------------------------------------------------------------
+*/
+
+$router->get(
+    '/api/v1/cart',
+    function (Request $request): void {
+        $user = AuthMiddleware::handle();
+
+        if ($user === null) {
+            return;
+        }
+
+        $controller = new CartController();
+
+        $controller->index(
+            $request,
+            $user
+        );
+    }
+);
+
+$router->post(
+    '/api/v1/cart/items',
+    function (Request $request): void {
+        $user = AuthMiddleware::handle();
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller = new CartController();
+
+        $controller->store(
+            $request,
+            $user
+        );
+    }
+);
+
+$router->patch(
+    '/api/v1/cart/items/{id}',
+    function (
+        Request $request,
+        array $params
+    ): void {
+        $user = AuthMiddleware::handle();
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $cartItemId =
+            isset($params['id'])
+            && ctype_digit(
+                (string) $params['id']
+            )
+                ? (int) $params['id']
+                : 0;
+
+        $controller = new CartController();
+
+        $controller->update(
+            $request,
+            $user,
+            $cartItemId
+        );
+    }
+);
+
+$router->delete(
+    '/api/v1/cart/items/{id}',
+    function (
+        Request $request,
+        array $params
+    ): void {
+        $user = AuthMiddleware::handle();
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $cartItemId =
+            isset($params['id'])
+            && ctype_digit(
+                (string) $params['id']
+            )
+                ? (int) $params['id']
+                : 0;
+
+        $controller = new CartController();
+
+        $controller->destroy(
+            $user,
+            $cartItemId
+        );
+    }
+);
+/*
+|--------------------------------------------------------------------------
+| Addresses
+|--------------------------------------------------------------------------
+*/
+
+$router->get(
+    '/api/v1/addresses',
+    function (Request $request): void {
+        $user = AuthMiddleware::handle();
+
+        if ($user === null) {
+            return;
+        }
+
+        $controller =
+            new AddressController();
+
+        $controller->index(
+            $request,
+            $user
+        );
+    }
+);
+
+$router->post(
+    '/api/v1/addresses',
+    function (Request $request): void {
+        $user = AuthMiddleware::handle();
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new AddressController();
+
+        $controller->store(
+            $request,
+            $user
+        );
+    }
+);
+/*
+|--------------------------------------------------------------------------
+| Checkout
+|--------------------------------------------------------------------------
+*/
+
+$router->get(
+    '/api/v1/checkout/summary',
+    function (Request $request): void {
+        $user =
+            AuthMiddleware::handle();
+
+        if ($user === null) {
+            return;
+        }
+
+        $controller =
+            new CheckoutController();
+
+        $controller->summary(
+            $request,
+            $user
+        );
+    }
+);
+$router->post(
+    '/api/v1/checkout/orders',
+    function (Request $request): void {
+        $user =
+            AuthMiddleware::handle();
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new CheckoutController();
+
+        $controller->createOrder(
+            $request,
+            $user
+        );
     }
 );
 
@@ -388,6 +599,116 @@ $router->post(
             new AuthController();
 
         $controller->register(
+            $request
+        );
+    }
+);
+$router->get(
+    '/api/v1/orders/{orderNumber}',
+    function (
+        Request $request,
+        array $params
+    ): void {
+        $user =
+            AuthMiddleware::handle(
+                $request
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        $orderNumber =
+            isset(
+                $params[
+                    'orderNumber'
+                ]
+            )
+                ? trim(
+                    (string) $params[
+                        'orderNumber'
+                    ]
+                )
+                : '';
+
+        $controller =
+            new OrderController();
+
+        $controller->show(
+            $user,
+            $orderNumber
+        );
+    }
+);
+/*
+|--------------------------------------------------------------------------
+| Payments - PayFast
+|--------------------------------------------------------------------------
+*/
+
+$router->post(
+    '/api/v1/payments/payfast',
+    function (Request $request): void {
+        $user =
+            AuthMiddleware::handle();
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new PaymentController();
+
+        $controller->createPayFastRequest(
+            $request,
+            $user
+        );
+    }
+);
+
+$router->get(
+    '/api/v1/payments/payfast/return',
+    function (Request $request): void {
+        $controller =
+            new PaymentController();
+
+        $controller->returnFromPayFast(
+            $request
+        );
+    }
+);
+
+$router->get(
+    '/api/v1/payments/payfast/cancel',
+    function (Request $request): void {
+        $controller =
+            new PaymentController();
+
+        $controller->cancelPayFast(
+            $request
+        );
+    }
+);
+$router->post(
+    '/api/v1/payments/payfast/notify',
+    function (Request $request): void {
+        /*
+         * PayFast is the caller here.
+         *
+         * No user authentication.
+         * No CSRF validation.
+         *
+         * Security is handled by the PayFast
+         * signature/source/amount/server checks.
+         */
+        $controller =
+            new PaymentController();
+
+        $controller->notifyPayFast(
             $request
         );
     }
