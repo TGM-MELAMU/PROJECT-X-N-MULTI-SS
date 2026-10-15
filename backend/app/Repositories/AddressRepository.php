@@ -119,7 +119,12 @@ final class AddressRepository
         string $country,
         bool $isDefault
     ): int {
-        $this->pdo->beginTransaction();
+        $ownsTransaction =
+            !$this->pdo->inTransaction();
+
+        if ($ownsTransaction) {
+            $this->pdo->beginTransaction();
+        }
 
         try {
             if ($isDefault) {
@@ -172,17 +177,23 @@ final class AddressRepository
                 'province' => $province,
                 'postal_code' => $postalCode,
                 'country' => $country,
-                'is_default' => $isDefault ? 1 : 0,
+                'is_default' =>
+                    $isDefault ? 1 : 0,
             ]);
 
             $addressId =
                 (int) $this->pdo->lastInsertId();
 
-            $this->pdo->commit();
+            if ($ownsTransaction) {
+                $this->pdo->commit();
+            }
 
             return $addressId;
         } catch (Throwable $exception) {
-            if ($this->pdo->inTransaction()) {
+            if (
+                $ownsTransaction
+                && $this->pdo->inTransaction()
+            ) {
                 $this->pdo->rollBack();
             }
 

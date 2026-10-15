@@ -22,6 +22,7 @@ final class CsrfMiddleware
      */
     private const EXEMPT_PATHS = [
         '/api/v1/payments/payfast/notify',
+        '/api/v1/payments/webhook',
     ];
 
     public static function token(): string

@@ -26,6 +26,10 @@ final class CartController
         Request $request,
         array $user
     ): void {
+        if (!$this->requireVerifiedCustomer($user)) {
+            return;
+        }
+
         $cart =
             $this->cart->getCart(
                 (int) $user['user_id'],
@@ -44,6 +48,10 @@ final class CartController
         Request $request,
         array $user
     ): void {
+        if (!$this->requireVerifiedCustomer($user)) {
+            return;
+        }
+
         try {
             $cart =
                 $this->cart->addItem(
@@ -91,6 +99,10 @@ final class CartController
         array $user,
         int $cartItemId
     ): void {
+        if (!$this->requireVerifiedCustomer($user)) {
+            return;
+        }
+
         try {
             $cart =
                 $this->cart->updateItem(
@@ -134,10 +146,39 @@ final class CartController
         }
     }
 
+    public function clear(
+        array $user
+    ): void {
+        if (!$this->requireVerifiedCustomer($user)) {
+            return;
+        }
+
+        $cart =
+            $this->cart->clearCart(
+                (int) $user['user_id'],
+                $this->canViewPrices(
+                    $user
+                )
+            );
+
+        Response::json([
+            'success' => true,
+            'message' =>
+                'Cart cleared.',
+            'data' => [
+                'cart' => $cart,
+            ],
+        ], 200);
+    }
+
     public function destroy(
         array $user,
         int $cartItemId
     ): void {
+        if (!$this->requireVerifiedCustomer($user)) {
+            return;
+        }
+
         try {
             $cart =
                 $this->cart->removeItem(
@@ -171,6 +212,25 @@ final class CartController
                 404
             );
         }
+    }
+
+    private function requireVerifiedCustomer(
+        array $user
+    ): bool {
+        if (
+            ($user['email_verified'] ?? false)
+            === true
+        ) {
+            return true;
+        }
+
+        Response::json([
+            'success' => false,
+            'message' =>
+                'Email verification required.',
+        ], 403);
+
+        return false;
     }
 
     private function canViewPrices(

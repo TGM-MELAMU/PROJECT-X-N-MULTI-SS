@@ -13,6 +13,9 @@ final class CartService
 {
     private const LOW_STOCK_THRESHOLD = 5;
 
+    private const CART_EXPIRATION_NOTICE =
+        'Items in your cart will expire after 7 days.';
+
     private CartRepository $carts;
 
     public function __construct(
@@ -202,6 +205,33 @@ final class CartService
         );
     }
 
+    public function clearCart(
+        int $userId,
+        bool $canViewPrices
+    ): array {
+        $cart =
+            $this->carts
+                ->findActiveCartByUserId(
+                    $userId
+                );
+
+        if ($cart === null) {
+            return $this->getCart(
+                $userId,
+                $canViewPrices
+            );
+        }
+
+        $this->carts->deleteAllCartItems(
+            (int) $cart['cart_id']
+        );
+
+        return $this->getCart(
+            $userId,
+            $canViewPrices
+        );
+    }
+
     private function assertPurchasable(
         ?array $variant,
         int $quantity
@@ -361,6 +391,9 @@ final class CartService
             'status' =>
                 $cart['cart_status']
                     ?? 'active',
+
+            'expiration_notice' =>
+                self::CART_EXPIRATION_NOTICE,
 
             'items' =>
                 $items,

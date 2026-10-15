@@ -11,6 +11,7 @@ use MultiSS\Core\Response;
 use MultiSS\Services\CheckoutService;
 use MultiSS\Services\OrderService;
 use OutOfBoundsException;
+use RuntimeException;
 
 final class CheckoutController
 {
@@ -44,7 +45,8 @@ final class CheckoutController
             Response::json([
                 'success' => true,
                 'data' => [
-                    'checkout' => $summary,
+                    'checkout' =>
+                        $summary,
                 ],
             ], 200);
         } catch (
@@ -55,6 +57,71 @@ final class CheckoutController
                 'message' =>
                     $exception->getMessage(),
             ], 409);
+        } catch (
+            RuntimeException $exception
+        ) {
+            Response::json([
+                'success' => false,
+                'message' =>
+                    $exception->getMessage(),
+            ], 503);
+        }
+    }
+
+    public function quote(
+        Request $request,
+        array $user
+    ): void {
+        try {
+            $quote =
+                $this->checkout->quote(
+                    (int) $user['user_id'],
+                    ($user['email_verified'] ?? false)
+                        === true,
+                    $request->body()
+                );
+
+            Response::json([
+                'success' => true,
+                'message' =>
+                    'Checkout quote calculated.',
+                'data' => [
+                    'checkout' =>
+                        $quote,
+                ],
+            ], 200);
+        } catch (
+            InvalidArgumentException $exception
+        ) {
+            Response::json([
+                'success' => false,
+                'message' =>
+                    $exception->getMessage(),
+            ], 422);
+        } catch (
+            OutOfBoundsException $exception
+        ) {
+            Response::json([
+                'success' => false,
+                'message' =>
+                    $exception->getMessage(),
+            ], 404);
+        } catch (
+            DomainException $exception
+        ) {
+            Response::json([
+                'success' => false,
+                'message' =>
+                    $exception->getMessage(),
+            ], 409);
+        } catch (
+            RuntimeException $exception
+        ) {
+            Response::json([
+                'success' => false,
+                'message' =>
+                    $exception->getMessage(),
+            ], 503);
         }
     }
 

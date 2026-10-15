@@ -9,6 +9,6 @@ use MultiSS\Core\ErrorHandler;
 
 ErrorHandler::register();
 
-$dotenv = Dotenv::createImmutable(__DIR__);
+$dotenv = Dotenv::createImmutable(dirname(__DIR__));
 
 $dotenv->load();
