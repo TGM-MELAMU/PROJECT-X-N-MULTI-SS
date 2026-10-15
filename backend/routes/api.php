@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use MultiSS\Controllers\PaymentController;
+use MultiSS\Controllers\DemoPaymentController;
 use MultiSS\Controllers\CartController;
 use MultiSS\Controllers\AdminProductController;
 use MultiSS\Controllers\AuthController;
@@ -906,6 +907,115 @@ $router->post(
         $controller->createOrder(
             $request,
             $user
+        );
+    }
+);
+/*
+|--------------------------------------------------------------------------
+| Phase 7 - Demo Payments
+|--------------------------------------------------------------------------
+*/
+
+$router->get(
+    '/api/v1/payments/{id}',
+    function (
+        Request $request,
+        array $params
+    ): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        $controller =
+            new DemoPaymentController();
+
+        $controller->show(
+            $user,
+            (string) (
+                $params['id']
+                ?? ''
+            )
+        );
+    }
+);
+
+$router->post(
+    '/api/v1/payments/demo/process',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new DemoPaymentController();
+
+        $controller->process(
+            $request,
+            $user
+        );
+    }
+);
+
+$router->post(
+    '/api/v1/payments/webhook',
+    function (Request $request): void {
+        /*
+         * Server-to-server callback.
+         * Authentication is performed by the
+         * payment gateway signature.
+         */
+        $controller =
+            new DemoPaymentController();
+
+        $controller->webhook(
+            $request
+        );
+    }
+);
+
+$router->post(
+    '/api/v1/admin/payments/{id}/refund',
+    function (
+        Request $request,
+        array $params
+    ): void {
+        $admin =
+            RoleMiddleware::handle(
+                'admin'
+            );
+
+        if ($admin === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new DemoPaymentController();
+
+        $controller->refund(
+            $request,
+            $admin,
+            (string) (
+                $params['id']
+                ?? ''
+            )
         );
     }
 );

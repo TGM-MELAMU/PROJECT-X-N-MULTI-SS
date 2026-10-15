@@ -783,6 +783,33 @@ final class OrderRepository
             ]);
 
             /*
+             * Phase 7:
+             * Create the initial pending payment
+             * inside the same transaction as the order.
+             */
+            $paymentConfig =
+                require __DIR__
+                    . '/../../config/payment_runtime.php';
+
+            $paymentRecords =
+                new PaymentRecordRepository(
+                    $this->pdo
+                );
+
+            $paymentRecords
+                ->createInitialPending(
+                    $orderId,
+                    $this->centsToMoney(
+                        $totalCents
+                    ),
+                    (string) $paymentConfig[
+                        'gateway'
+                    ],
+                    (string) $paymentConfig[
+                        'payment_method'
+                    ]
+                );
+            /*
              * The cart has now become this order.
              *
              * Inventory is intentionally NOT changed here.
