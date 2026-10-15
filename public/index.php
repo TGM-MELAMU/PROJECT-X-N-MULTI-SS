@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/../backend/bootstrap.php';
 
 use MultiSS\Core\Request;
 use MultiSS\Core\Router;
@@ -26,6 +26,6 @@ CsrfMiddleware::validate($request);
 
 $router = new Router();
 
-require_once __DIR__ . '/../routes/api.php';
+require_once __DIR__ . '/../backend/routes/api.php';
 
 $router->dispatch($request);

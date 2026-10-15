@@ -12,14 +12,88 @@ final class CheckoutService
 
     private CartService $cart;
 
+    private DeliveryService $delivery;
+
     public function __construct(
-        ?CartService $cart = null
+        ?CartService $cart = null,
+        ?DeliveryService $delivery = null
     ) {
         $this->cart =
             $cart ?? new CartService();
+
+        $this->delivery =
+            $delivery ?? new DeliveryService();
     }
 
     public function getSummary(
+        int $userId,
+        bool $emailVerified
+    ): array {
+        $cart =
+            $this->validatedCart(
+                $userId,
+                $emailVerified
+            );
+
+        $totals =
+            $this->baseTotals(
+                $cart,
+                0.00
+            );
+
+        return [
+            'cart' => $cart,
+
+            'totals' => $totals,
+
+            'fulfillment' => [
+                'quote_required' => true,
+
+                'options' =>
+                    $this->delivery
+                        ->options(),
+            ],
+        ];
+    }
+
+    public function quote(
+        int $userId,
+        bool $emailVerified,
+        array $data
+    ): array {
+        $cart =
+            $this->validatedCart(
+                $userId,
+                $emailVerified
+            );
+
+        $deliveryQuote =
+            $this->delivery
+                ->quote(
+                    $userId,
+                    $data
+                );
+
+        $totals =
+            $this->baseTotals(
+                $cart,
+                (float) $deliveryQuote[
+                    'delivery_fee'
+                ]
+            );
+
+        return [
+            'cart' => $cart,
+
+            'fulfillment' =>
+                $deliveryQuote,
+
+            'totals' =>
+                $totals,
+        ];
+    }
+
+    private function validatedCart(
         int $userId,
         bool $emailVerified
     ): array {
@@ -41,74 +115,63 @@ final class CheckoutService
             );
         }
 
+        return $cart;
+    }
+
+    private function baseTotals(
+        array $cart,
+        float $shippingAmount
+    ): array {
         $subtotal =
             round(
                 (float) (
-                    $cart['summary']['subtotal']
+                    $cart['summary'][
+                        'subtotal'
+                    ]
                     ?? 0
                 ),
                 2
             );
 
-        /*
-         * MultiSS selling prices are VAT-inclusive.
-         *
-         * VAT portion of a VAT-inclusive amount:
-         * total × 15 / 115
-         */
         $vatAmount =
             round(
                 $subtotal
                 * self::VAT_RATE
-                / (100 + self::VAT_RATE),
+                / (
+                    100
+                    + self::VAT_RATE
+                ),
                 2
             );
 
-        /*
-         * Phase 4 delivery placeholder.
-         * A real delivery calculation can replace this later.
-         */
-        $shippingAmount = 0.00;
-
-        $grandTotal =
+        $shippingAmount =
             round(
-                $subtotal + $shippingAmount,
+                $shippingAmount,
                 2
             );
 
         return [
-            'cart' => $cart,
+            'subtotal' =>
+                $subtotal,
 
-            'totals' => [
-                'subtotal' =>
-                    $subtotal,
+            'vat_rate' =>
+                self::VAT_RATE,
 
-                'vat_rate' =>
-                    self::VAT_RATE,
+            'vat_amount' =>
+                $vatAmount,
 
-                'vat_amount' =>
-                    $vatAmount,
+            'shipping_amount' =>
+                $shippingAmount,
 
-                'shipping_amount' =>
-                    $shippingAmount,
+            'grand_total' =>
+                round(
+                    $subtotal
+                    + $shippingAmount,
+                    2
+                ),
 
-                'grand_total' =>
-                    $grandTotal,
-
-                'prices_include_vat' =>
-                    true,
-            ],
-
-            'delivery' => [
-                'method' =>
-                    'placeholder',
-
-                'amount' =>
-                    $shippingAmount,
-
-                'message' =>
-                    'Delivery cost is currently set to R0.00 and will be replaced by the final delivery calculation.',
-            ],
+            'prices_include_vat' =>
+                true,
         ];
     }
 }

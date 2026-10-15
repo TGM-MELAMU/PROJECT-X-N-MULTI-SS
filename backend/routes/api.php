@@ -765,3 +765,147 @@ $router->post(
         );
     }
 );
+/*
+|--------------------------------------------------------------------------
+| Phase 6 - Checkout Quote
+|--------------------------------------------------------------------------
+*/
+
+$router->post(
+    '/api/v1/checkout/quote',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new CheckoutController();
+
+        $controller->quote(
+            $request,
+            $user
+        );
+    }
+);
+/*
+|--------------------------------------------------------------------------
+| Phase 6 - Customer Order History
+|--------------------------------------------------------------------------
+*/
+
+$router->get(
+    '/api/v1/orders',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        $controller =
+            new OrderController();
+
+        $controller->index(
+            $request,
+            $user
+        );
+    }
+);
+$router->post(
+    '/api/v1/orders/{orderNumber}/cancel',
+    function (
+        Request $request,
+        array $params
+    ): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $orderNumber =
+            trim(
+                (string) (
+                    $params['orderNumber']
+                    ?? ''
+                )
+            );
+
+        $controller =
+            new OrderController();
+
+        $controller->cancel(
+            $user,
+            $orderNumber
+        );
+    }
+);
+$router->post(
+    '/api/v1/checkout/validate',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new CheckoutController();
+
+        $controller->summary(
+            $request,
+            $user
+        );
+    }
+);
+$router->post(
+    '/api/v1/checkout/create-order',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new CheckoutController();
+
+        $controller->createOrder(
+            $request,
+            $user
+        );
+    }
+);

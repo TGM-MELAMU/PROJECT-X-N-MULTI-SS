@@ -13,40 +13,57 @@ final class OrderService
 {
     private OrderRepository $orders;
 
+    private DeliveryService $delivery;
+
+    private array $config;
+
     public function __construct(
-        ?OrderRepository $orders = null
+        ?OrderRepository $orders = null,
+        ?DeliveryService $delivery = null,
+        ?array $config = null
     ) {
         $this->orders =
             $orders ?? new OrderRepository();
+
+        $this->delivery =
+            $delivery ?? new DeliveryService();
+
+        $this->config =
+            $config
+            ?? require __DIR__
+                . '/../../config/orders.php';
     }
 
     public function createPendingOrder(
         array $user,
         array $data
     ): array {
-        if (
-            ($user['email_verified'] ?? false)
-            !== true
-        ) {
-            throw new DomainException(
-                'Email verification is required before checkout.'
-            );
-        }
-
         $userId =
-            (int) ($user['user_id'] ?? 0);
-
-        if ($userId <= 0) {
-            throw new DomainException(
-                'Authentication required.'
+            $this->verifiedUserId(
+                $user,
+                'checkout'
             );
-        }
+
+        /*
+         * Recalculate fulfillment server-side when
+         * the order is actually created.
+         *
+         * We do not trust a delivery fee supplied
+         * by the frontend.
+         */
+        $fulfillment =
+            $this->delivery->quote(
+                $userId,
+                $data
+            );
 
         $addressId =
-            $this->positiveInt(
-                $data['address_id'] ?? null,
-                'Address ID'
-            );
+            $fulfillment['address_id']
+                !== null
+                    ? (int) $fulfillment[
+                        'address_id'
+                    ]
+                    : null;
 
         $contactNumber =
             trim(
@@ -70,27 +87,21 @@ final class OrderService
             );
         }
 
-        $firstName =
-            trim(
-                (string) (
-                    $user['first_name']
-                    ?? ''
-                )
-            );
-
-        $lastName =
-            trim(
-                (string) (
-                    $user['last_name']
-                    ?? ''
-                )
-            );
-
         $recipientName =
             trim(
-                $firstName
+                trim(
+                    (string) (
+                        $user['first_name']
+                        ?? ''
+                    )
+                )
                 . ' '
-                . $lastName
+                . trim(
+                    (string) (
+                        $user['last_name']
+                        ?? ''
+                    )
+                )
             );
 
         if ($recipientName === '') {
@@ -99,30 +110,132 @@ final class OrderService
             );
         }
 
-        $orderNumber =
-            $this->createOrderNumber();
-
-        return
+        $order =
             $this->orders
                 ->createPendingOrder(
                     $userId,
                     $addressId,
                     $recipientName,
                     $contactNumber,
-                    $orderNumber
+                    $this->createOrderNumber(),
+                    $fulfillment
                 );
+
+        $order['fulfillment'] =
+            $fulfillment;
+
+        return $order;
+    }
+
+    public function listCustomerOrders(
+        array $user,
+        array $query
+    ): array {
+        $userId =
+            $this->verifiedUserId(
+                $user,
+                'view orders'
+            );
+
+        $page =
+            $this->paginationInt(
+                $query['page'] ?? 1,
+                1,
+                100000
+            );
+
+        $perPage =
+            $this->paginationInt(
+                $query['per_page'] ?? 20,
+                1,
+                100
+            );
+
+        return $this->orders
+            ->listCustomerOrders(
+                $userId,
+                $page,
+                $perPage
+            );
     }
 
     public function getCustomerOrder(
         array $user,
         string $orderNumber
     ): array {
+        $userId =
+            $this->verifiedUserId(
+                $user,
+                'view orders'
+            );
+
+        $orderNumber =
+            $this->validatedOrderNumber(
+                $orderNumber
+            );
+
+        $order =
+            $this->orders
+                ->findCustomerOrderByNumber(
+                    $userId,
+                    $orderNumber
+                );
+
+        if ($order === null) {
+            throw new OutOfBoundsException(
+                'Order not found.'
+            );
+        }
+
+        $order['fulfillment'] =
+            $this->orders
+                ->findCustomerFulfillmentByOrderId(
+                    (int) $order['order_id']
+                );
+
+        return $order;
+    }
+
+    public function cancelCustomerOrder(
+        array $user,
+        string $orderNumber
+    ): array {
+        $userId =
+            $this->verifiedUserId(
+                $user,
+                'cancel orders'
+            );
+
+        $orderNumber =
+            $this->validatedOrderNumber(
+                $orderNumber
+            );
+
+        return $this->orders
+            ->cancelCustomerOrder(
+                $userId,
+                $orderNumber,
+                $this->config[
+                    'customer_cancellable_statuses'
+                ] ?? [],
+                $this->config[
+                    'blocked_fulfillment_statuses'
+                ] ?? []
+            );
+    }
+
+    private function verifiedUserId(
+        array $user,
+        string $action
+    ): int {
         if (
             ($user['email_verified'] ?? false)
             !== true
         ) {
             throw new DomainException(
-                'Email verification is required to view orders.'
+                'Email verification is required to '
+                . $action
+                . '.'
             );
         }
 
@@ -138,6 +251,12 @@ final class OrderService
             );
         }
 
+        return $userId;
+    }
+
+    private function validatedOrderNumber(
+        string $orderNumber
+    ): string {
         $orderNumber =
             trim($orderNumber);
 
@@ -155,20 +274,36 @@ final class OrderService
             );
         }
 
-        $order =
-            $this->orders
-                ->findCustomerOrderByNumber(
-                    $userId,
-                    $orderNumber
-                );
+        return $orderNumber;
+    }
 
-        if ($order === null) {
-            throw new OutOfBoundsException(
-                'Order not found.'
+    private function paginationInt(
+        mixed $value,
+        int $minimum,
+        int $maximum
+    ): int {
+        $validated =
+            filter_var(
+                $value,
+                FILTER_VALIDATE_INT,
+                [
+                    'options' => [
+                        'min_range' =>
+                            $minimum,
+
+                        'max_range' =>
+                            $maximum,
+                    ],
+                ]
+            );
+
+        if ($validated === false) {
+            throw new InvalidArgumentException(
+                'Invalid pagination value.'
             );
         }
 
-        return $order;
+        return (int) $validated;
     }
 
     private function createOrderNumber(): string
@@ -182,30 +317,5 @@ final class OrderService
                     random_bytes(3)
                 )
             );
-    }
-
-    private function positiveInt(
-        mixed $value,
-        string $field
-    ): int {
-        $validated =
-            filter_var(
-                $value,
-                FILTER_VALIDATE_INT,
-                [
-                    'options' => [
-                        'min_range' => 1,
-                    ],
-                ]
-            );
-
-        if ($validated === false) {
-            throw new InvalidArgumentException(
-                $field
-                . ' must be a positive integer.'
-            );
-        }
-
-        return (int) $validated;
     }
 }
