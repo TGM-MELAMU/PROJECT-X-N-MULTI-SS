@@ -25,6 +25,9 @@ const phone = z
   .transform((v) => (v ? v : undefined))
   .refine((v) => v === undefined || /^\+?[0-9 ()-]{7,20}$/.test(v), "Enter a valid phone number, like 082 123 4567.");
 
+/** Optional phone number field, shared with the account forms. */
+export const phoneField = phone;
+
 export const loginSchema = z.object({
   email,
   password: z.string().min(1, "Enter your password.").max(200),

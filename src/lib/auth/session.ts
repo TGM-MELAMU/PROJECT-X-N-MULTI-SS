@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { passwordStamp } from "./password";
@@ -37,3 +38,10 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     roles: user.roles.map((r) => r.role.name),
   };
 });
+
+/** For pages that need a signed-in user: returns them, or sends the visitor to log in. */
+export async function requirePageUser(): Promise<CurrentUser> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  return user;
+}
