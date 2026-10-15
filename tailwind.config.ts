@@ -1,9 +1,8 @@
 import type { Config } from "tailwindcss";
 
 /**
- * Design tokens, derived from client-approved Prototype 2.
- * Brand = deep laboratory green; sale = signal red; surfaces are cool, slightly green-tinted greys
- * so the green reads as part of the page rather than an accent on top of it.
+ * Design tokens: Egyptian Blue (#1034A6) and White color scheme.
+ * Brand = Egyptian Blue; sale = signal red; surfaces are crisp white and cool light slate.
  */
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
@@ -11,22 +10,22 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          50: "#eef7f2",
-          100: "#d8ece0",
-          200: "#b3d9c3",
-          300: "#82bf9d",
-          400: "#4f9f78",
-          500: "#2f825c",
-          600: "#1e6847",
-          700: "#175339",
-          800: "#0f3f2c",
-          900: "#0a2e20",
-          950: "#061c13",
+          50: "#eff4fe",
+          100: "#dce7fd",
+          200: "#c0d5fc",
+          300: "#93b9fa",
+          400: "#5f95f5",
+          500: "#3372ee",
+          600: "#1c52dd",
+          700: "#1034a6", // Egyptian Blue reference #1034A6
+          800: "#0d2a84",
+          900: "#0a2064",
+          950: "#051036",
         },
         sale: { DEFAULT: "#d62828", dark: "#a81d1d", tint: "#fdecec" },
-        surface: { DEFAULT: "#ffffff", muted: "#f3f6f4", sunken: "#e8eeea" },
-        ink: { DEFAULT: "#14211a", soft: "#3a4a41", muted: "#5c6c63" },
-        line: { DEFAULT: "#dbe3de", strong: "#bfccc4" },
+        surface: { DEFAULT: "#ffffff", muted: "#f8fafc", sunken: "#f1f5f9" },
+        ink: { DEFAULT: "#0f172a", soft: "#334155", muted: "#64748b" },
+        line: { DEFAULT: "#e2e8f0", strong: "#cbd5e1" },
       },
       fontFamily: {
         sans: ['"IBM Plex Sans Variable"', "system-ui", "sans-serif"],
@@ -49,8 +48,8 @@ const config: Config = {
         card: "0.625rem",
       },
       boxShadow: {
-        card: "0 1px 2px rgb(10 46 32 / 0.06), 0 0 0 1px rgb(10 46 32 / 0.05)",
-        lift: "0 8px 24px -8px rgb(10 46 32 / 0.25), 0 0 0 1px rgb(10 46 32 / 0.08)",
+        card: "0 1px 3px rgb(16 52 166 / 0.06), 0 0 0 1px rgb(16 52 166 / 0.05)",
+        lift: "0 10px 28px -10px rgb(16 52 166 / 0.22), 0 0 0 1px rgb(16 52 166 / 0.08)",
       },
       maxWidth: { shell: "80rem" },
     },
