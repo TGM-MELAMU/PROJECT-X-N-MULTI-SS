@@ -21,3 +21,6 @@ next-env.d.ts
 .DS_Store
 /backend/vendor/
 /backend/vendor/
+
+# Runtime rate limiting (do not version generated JSON)
+/backend/storage/rate-limits/
