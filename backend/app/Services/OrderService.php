@@ -123,7 +123,9 @@ final class OrderService
 
         $order['fulfillment'] =
             $fulfillment;
-
+        (new NotificationService())->notify($userId,
+            'order:' . $order['order_id'] . ':pending_payment',
+            'order_status_changed', ['order'=>$order['order_number'], 'status'=>'pending payment']);
         return $order;
     }
 
@@ -211,17 +213,17 @@ final class OrderService
                 $orderNumber
             );
 
-        return $this->orders
+        $result = $this->orders
             ->cancelCustomerOrder(
                 $userId,
                 $orderNumber,
-                $this->config[
-                    'customer_cancellable_statuses'
-                ] ?? [],
-                $this->config[
-                    'blocked_fulfillment_statuses'
-                ] ?? []
+                $this->config['customer_cancellable_statuses'] ?? [],
+                $this->config['blocked_fulfillment_statuses'] ?? []
             );
+        (new NotificationService())->notify($userId,
+            'order:' . $result['order_id'] . ':cancelled',
+            'order_status_changed', ['order'=>$result['order_number'], 'status'=>'cancelled']);
+        return $result;
     }
 
     private function verifiedUserId(

@@ -1,4 +1,4 @@
-﻿-- MultiSS Phase 6 + 7 foundation
+-- MultiSS Phase 6 + 7 foundation
 -- Checkout, delivery, collection, fulfillment, shipment tracking,
 -- and payment webhook/idempotency support.
 --

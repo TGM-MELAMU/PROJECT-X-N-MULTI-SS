@@ -51,9 +51,20 @@ final class AdminProductService
             $reviewerId
         );
 
-        return $this->products->findById(
-            $productId
-        ) ?? [];
+        $updated = $this->products->findById($productId) ?? [];
+        if (isset($updated['vendor_id'])) {
+            try {
+                $repo = new \MultiSS\Repositories\NotificationRepository();
+                $notify = new NotificationService();
+                foreach ($repo->vendorManagers((int)$updated['vendor_id']) as $recipient) {
+                    $notify->notify($recipient, 'product:' . $productId . ':approved',
+                        'product_approval', ['product'=>$updated['product_name'] ?? 'Product', 'status'=>'approved']);
+                }
+            } catch (\Throwable $error) {
+                \MultiSS\Core\Logger::error('Unable to notify vendor of product review', ['type'=>$error::class]);
+            }
+        }
+        return $updated;
     }
 
     public function reject(
@@ -98,8 +109,19 @@ final class AdminProductService
             $reason
         );
 
-        return $this->products->findById(
-            $productId
-        ) ?? [];
+        $updated = $this->products->findById($productId) ?? [];
+        if (isset($updated['vendor_id'])) {
+            try {
+                $repo = new \MultiSS\Repositories\NotificationRepository();
+                $notify = new NotificationService();
+                foreach ($repo->vendorManagers((int)$updated['vendor_id']) as $recipient) {
+                    $notify->notify($recipient, 'product:' . $productId . ':rejected',
+                        'product_approval', ['product'=>$updated['product_name'] ?? 'Product', 'status'=>'rejected']);
+                }
+            } catch (\Throwable $error) {
+                \MultiSS\Core\Logger::error('Unable to notify vendor of product review', ['type'=>$error::class]);
+            }
+        }
+        return $updated;
     }
 }

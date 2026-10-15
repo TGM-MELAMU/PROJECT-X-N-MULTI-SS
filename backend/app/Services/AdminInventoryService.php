@@ -75,8 +75,10 @@ final class AdminInventoryService
                 throw new InvalidArgumentException('reorder_level must be a non-negative integer.');
             }
         }
-        return ['adjustment' => $this->repo->adjust($id, $adminId, $type, (int) $change,
-            $notes === null ? null : trim($notes), $reorder)];
+        $adjustment = $this->repo->adjust($id, $adminId, $type, (int) $change,
+            $notes === null ? null : trim($notes), $reorder);
+        (new NotificationService())->lowStockAfterAdjustment($adjustment);
+        return ['adjustment' => $adjustment];
     }
 
     private function pagination(array $query): array
