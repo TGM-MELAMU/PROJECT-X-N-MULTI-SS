@@ -69,6 +69,23 @@ export type ShopResult = {
 /** Slug of the category that is derived from compare-at prices rather than manual tagging. */
 export const SPECIAL_OFFERS_SLUG = "special-offers";
 
+/**
+ * Virtual category for products that have no real category yet, so nothing in the catalogue is
+ * reachable only through search. It never exists in the database and is only listed in the shop
+ * filter when it has products.
+ */
+export const OTHER_SLUG = "other";
+export const OTHER_NAME = "Other products";
+
+/** A category as the storefront menus and filters see it (built from the database by store-categories.ts). */
+export type StoreCategory = {
+  slug: string;
+  name: string;
+  icon?: CategoryIconName;
+  /** Slug of the parent category, or null for a top-level one. */
+  parentSlug: string | null;
+};
+
 /** Stock at or below this shows "Only N left". */
 export const LOW_STOCK_THRESHOLD = 5;
 

@@ -1,4 +1,5 @@
 import {
+  OTHER_SLUG,
   SPECIAL_OFFERS_SLUG,
   type CatalogueRow,
   type Facets,
@@ -11,6 +12,8 @@ export const PAGE_SIZE = 12;
 const isOnSale = (r: CatalogueRow) => r.wasCents != null && r.wasCents > r.priceCents;
 
 function inCategory(r: CatalogueRow, slug: string): boolean {
+  // "Other products": nothing but, at most, the derived Special Offers tag.
+  if (slug === OTHER_SLUG) return r.categorySlugs.every((s) => s === SPECIAL_OFFERS_SLUG);
   // "Special Offers" is derived from compare-at prices so staff never have to tag it by hand.
   if (slug === SPECIAL_OFFERS_SLUG) return isOnSale(r) || r.categorySlugs.includes(slug);
   return r.categorySlugs.includes(slug);
@@ -119,4 +122,46 @@ export function queryCatalogue(
   const items = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   return { items, total, page, pageCount, pageSize, facets: buildFacets(rows, params, allCategorySlugs) };
+}
+
+/**
+ * Hides every "New" badge when a bulk import has made a large share of the catalogue "new" at once
+ * (the first 6,300 products were all created on one day, so every card said "New"). Once real
+ * new products arrive a month after the import, the badge comes back by itself.
+ */
+export function applyNewBadgeGuard<T extends { isNew: boolean }>(rows: T[], maxShare = 0.05): T[] {
+  if (rows.length === 0) return rows;
+  const newCount = rows.reduce((n, r) => n + (r.isNew ? 1 : 0), 0);
+  if (newCount / rows.length <= maxShare) return rows;
+  return rows.map((r) => (r.isNew ? { ...r, isNew: false } : r));
+}
+
+/**
+ * Products for the home page when nobody has marked any as featured yet: in stock first, then
+ * best selling, then newest, with at most `perCategory` from one category so it isn't a wall of
+ * one kind of product.
+ */
+export function pickShowcase(rows: CatalogueRow[], limit: number, perCategory = 2): CatalogueRow[] {
+  const sorted = [...rows].sort(
+    (a, b) =>
+      Number(b.inStock) - Number(a.inStock) ||
+      b.popularity - a.popularity ||
+      b.createdAtMs - a.createdAtMs ||
+      a.name.localeCompare(b.name, "en"),
+  );
+  const picked: CatalogueRow[] = [];
+  const perCat = new Map<string, number>();
+  for (const r of sorted) {
+    if (picked.length >= limit) break;
+    const key = r.categorySlug ?? "";
+    if ((perCat.get(key) ?? 0) >= perCategory) continue;
+    perCat.set(key, (perCat.get(key) ?? 0) + 1);
+    picked.push(r);
+  }
+  // Fewer categories than needed: fill the rest without the cap.
+  for (const r of sorted) {
+    if (picked.length >= limit) break;
+    if (!picked.includes(r)) picked.push(r);
+  }
+  return picked;
 }

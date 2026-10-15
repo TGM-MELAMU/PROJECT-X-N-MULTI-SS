@@ -1,11 +1,9 @@
 import Link from "next/link";
-import { categories } from "@/config/site";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
-import type { ShopParams, ShopResult } from "@/lib/catalogue-types";
+import { OTHER_NAME, OTHER_SLUG, type ShopParams, type ShopResult, type StoreCategory } from "@/lib/catalogue-types";
 import { hasActiveFilters, shopHref } from "@/lib/shop-params";
-
-const labelFor = (slug: string) => categories.find((c) => c.slug === slug)?.name ?? slug;
+import { childrenOf, topLevel } from "@/lib/store-categories";
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -23,13 +21,25 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 export function FilterPanel({
   params,
   facets,
+  categories,
   idPrefix,
 }: {
   params: ShopParams;
   facets: ShopResult["facets"];
+  categories: StoreCategory[];
   idPrefix: string;
 }) {
-  const visibleCategories = facets.categories.filter((c) => c.count > 0 || c.slug === params.category);
+  const countOf = new Map(facets.categories.map((c) => [c.slug, c.count]));
+  const show = (slug: string) => (countOf.get(slug) ?? 0) > 0 || slug === params.category;
+  const selected = categories.find((c) => c.slug === params.category);
+  // Sub-categories are listed under their parent once the parent (or one of them) is chosen.
+  const expanded = (c: StoreCategory) => c.slug === params.category || selected?.parentSlug === c.slug;
+  const rows: Array<{ slug: string; name: string; indent: boolean }> = [];
+  for (const c of topLevel(categories).filter((c) => show(c.slug))) {
+    rows.push({ slug: c.slug, name: c.name, indent: false });
+    if (expanded(c)) for (const s of childrenOf(categories, c.slug).filter((s) => show(s.slug))) rows.push({ slug: s.slug, name: s.name, indent: true });
+  }
+  if (show(OTHER_SLUG)) rows.push({ slug: OTHER_SLUG, name: OTHER_NAME, indent: false });
   const selectedBrands = new Set(params.brands.map((b) => b.toLowerCase()));
 
   return (
@@ -45,7 +55,7 @@ export function FilterPanel({
               All products
             </Link>
           </li>
-          {visibleCategories.map((c) => {
+          {rows.map((c) => {
             const active = params.category === c.slug;
             return (
               <li key={c.slug}>
@@ -54,12 +64,13 @@ export function FilterPanel({
                   aria-current={active ? "true" : undefined}
                   className={cn(
                     "flex items-baseline justify-between gap-2 rounded-control px-2 py-1.5 hover:bg-brand-50",
+                    c.indent && "ml-3 text-ink-soft",
                     active && "bg-brand-50 font-semibold text-brand-800",
                     c.slug === "special-offers" && !active && "text-sale",
                   )}
                 >
-                  <span>{labelFor(c.slug)}</span>
-                  <span className="nums text-xs text-ink-muted">{c.count}</span>
+                  <span>{c.name}</span>
+                  <span className="nums text-xs text-ink-muted">{countOf.get(c.slug) ?? 0}</span>
                 </Link>
               </li>
             );

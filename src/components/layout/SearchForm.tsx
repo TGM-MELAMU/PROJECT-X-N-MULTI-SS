@@ -1,9 +1,10 @@
 import { useId } from "react";
 import { Search } from "lucide-react";
-import { categories } from "@/config/site";
+import type { StoreCategory } from "@/lib/catalogue-types";
+import { topLevel } from "@/lib/store-categories";
 
 /** Plain GET form: works without JavaScript and keeps the search URL shareable. */
-export function SearchForm({ defaultQuery = "" }: { defaultQuery?: string }) {
+export function SearchForm({ defaultQuery = "", categories = [] }: { defaultQuery?: string; categories?: StoreCategory[] }) {
   const id = useId();
   return (
     <form action="/shop" role="search" className="flex h-11 w-full overflow-hidden rounded-control bg-surface ring-1 ring-line-strong focus-within:ring-2 focus-within:ring-brand-600">
@@ -29,7 +30,7 @@ export function SearchForm({ defaultQuery = "" }: { defaultQuery?: string }) {
         className="hidden w-44 border-l border-line bg-surface-muted px-3 text-sm text-ink-soft outline-none md:block"
       >
         <option value="">All categories</option>
-        {categories.map((c) => (
+        {topLevel(categories).map((c) => (
           <option key={c.slug} value={c.slug}>
             {c.name}
           </option>
