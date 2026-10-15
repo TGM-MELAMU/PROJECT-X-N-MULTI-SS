@@ -118,3 +118,19 @@ See `docs/PHASE0.md` for decisions, open questions and the re-scoped plan.
   with `next dev` and a *dev* database; the header of that file lists the env it needs).
 - **Not built yet:** cancelling an unpaid order, refunds, and emails to the customer and vendors (planned for the admin phase).
   An order left unpaid keeps its items reserved in that order, not in the cart; the customer can pay it from `/account/orders`.
+
+## Phase 6 notes (admin dashboard)
+
+- **Where:** `/admin` (admins only; the link is in the top bar). Dashboard, Orders, Products, Stock, Categories.
+- **Orders:** search by order number, name or email; filter by status. Admins move an order forward (confirmed, processing, completed) or cancel it.
+  Paid orders become "Received/Confirmed" by themselves through PayFast, so "paid" is never set by hand. Cancelling a paid order puts its items back in
+  stock but **does not refund**: refund in PayFast. Every change is written to the order's history with the admin's name.
+- **Products:** list with filters (category, stock, status, approval, featured), add a product, edit details, categories, price/"was" price, status,
+  approval and photos (by image address; file upload is not built).
+- **Stock:** set an exact quantity per variant, or import a CSV of SKU and quantity (comma, semicolon or tab separated). Every change writes an
+  `inventory_movements` row. The import never creates products; unknown SKUs are listed back.
+- **Categories:** add, rename, re-parent, hide. Categories come from the database, so a new one shows in the menu, filters and category page with no code change.
+  Products with no (active) category show under "Other products".
+- Every admin page **and** every admin server action checks the admin role against the database (`requireAdmin()`), not just the cookie.
+- Admin edits call `invalidateCatalogue()`, so the shop updates at once (single server process).
+- **Not built:** deleting products/categories, photo upload, refunds, customer emails on status change, user management, vendor approval screens, audit log beyond order notes.

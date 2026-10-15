@@ -6,6 +6,7 @@ import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { site } from "@/config/site";
 import { getCurrentUser } from "@/lib/auth/session";
 import { getCartCount } from "@/lib/cart";
+import { getStoreCategories } from "@/lib/catalogue";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -25,7 +26,12 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const user = await getCurrentUser().catch(() => null);
   const cartCount = user ? await getCartCount(user.id).catch(() => 0) : 0;
-  const who = user ? { firstName: user.firstName } : null;
+  const who = user ? { firstName: user.firstName, isAdmin: user.roles.includes("admin") } : null;
+  // The menu comes from the database; if that fails the page still renders, just without the category list.
+  const categories = await getStoreCategories().catch((err) => {
+    console.error("layout: failed to load categories", err);
+    return [];
+  });
 
   return (
     <html lang="en-ZA">
@@ -36,7 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         >
           Skip to content
         </a>
-        <Header cartCount={cartCount} user={who} />
+        <Header cartCount={cartCount} user={who} categories={categories} />
         <main id="main" className="flex-1 pb-16 md:pb-0">
           {children}
         </main>
