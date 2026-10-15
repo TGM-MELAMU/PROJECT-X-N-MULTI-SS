@@ -197,6 +197,16 @@ HTML;
         );
     }
 
+    /** Outbound operational notifications; body is plain text, never user-supplied HTML. */
+    public function sendMessage(string $email, string $subject, string $body): void
+    {
+        if (!$this->isConfigured()) {
+            throw new RuntimeException('Email service is not configured.');
+        }
+        $safeBody = nl2br(htmlspecialchars($body, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'));
+        $this->send($email, $subject, '<p>' . $safeBody . '</p>', $body);
+    }
+
     private function send(
         string $recipientEmail,
         string $subject,

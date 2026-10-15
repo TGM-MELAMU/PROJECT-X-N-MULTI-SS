@@ -53,6 +53,18 @@ final class AdminVendorService
             throw new DomainException('The MultiSS platform vendor cannot be changed here.');
         }
         $this->repo->status($id, $status);
+        if ($vendor['vendor_status'] !== $status) {
+            try {
+                $alerts = new NotificationService();
+                $target = new \MultiSS\Repositories\NotificationRepository();
+                foreach ($target->vendorManagers($id) as $recipient) {
+                    $alerts->notify($recipient, 'vendor:' . $id . ':status:' . bin2hex(random_bytes(8)),
+                        'vendor_status_changed', ['company'=>$vendor['institution_company_name'], 'status'=>$status]);
+                }
+            } catch (\Throwable $error) {
+                \MultiSS\Core\Logger::error('Unable to alert vendor about status', ['type'=>$error::class]);
+            }
+        }
         return $this->vendor($id);
     }
 

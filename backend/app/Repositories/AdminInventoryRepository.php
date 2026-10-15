@@ -112,8 +112,10 @@ final class AdminInventoryRepository
                   new_quantity, performed_by, notes)
                  VALUES (?, ?, ?, ?, ?, ?, ?)'
             )->execute([$variantId, $type, $change, $before, $after, $adminId, $notes]);
+            $movementId = (int) $this->pdo->lastInsertId();
             $this->pdo->commit();
-            return ['variant_id' => $variantId, 'previous_quantity' => $before,
+            return ['variant_id' => $variantId, 'movement_id' => $movementId,
+                    'previous_quantity' => $before,
                     'quantity_change' => $change, 'new_quantity' => $after,
                     'reorder_level' => $level, 'movement_type' => $type];
         } catch (\Throwable $error) {
