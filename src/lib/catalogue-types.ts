@@ -20,9 +20,8 @@ export type ProductSummary = {
 
 /** One row of the in-memory catalogue that filtering, sorting and facets run over. */
 export type CatalogueRow = ProductSummary & {
-  description: string | null;
   categorySlugs: string[];
-  /** Lower-cased text searched by `q`: name, brand, description, SKUs, model numbers. */
+  /** Lower-cased text searched by `q`: name, brand, start of description, SKUs, model numbers. */
   searchText: string;
   createdAtMs: number;
   /** Units sold in confirmed orders, for the "Best sellers" sort. */

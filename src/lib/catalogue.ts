@@ -1,4 +1,3 @@
-import { unstable_cache } from "next/cache";
 import { categories } from "@/config/site";
 import { iconFor, sampleDetail, sampleRows } from "@/lib/catalogue-samples";
 import { db } from "@/lib/db";
@@ -27,20 +26,37 @@ const categorySlugs = categories.map((c) => c.slug);
 
 /**
  * Loads every active product as a light row. Filtering, sorting and facets then run in memory
- * (see catalogue-query.ts). That is simple and fast for a catalogue of up to a few thousand
- * products; beyond that, move filtering into SQL.
+ * (see catalogue-query.ts). Measured on the real catalogue (about 6,300 products): load takes
+ * roughly half a second, and queries over the loaded rows take a few milliseconds. Comfortable
+ * to tens of thousands of products; beyond that, move filtering into SQL.
  */
 export async function loadFromDb(): Promise<CatalogueRow[]> {
   const [products, sold] = await Promise.all([
     db.product.findMany({
-      where: { status: "active" },
-      include: {
-        images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1 },
-        categories: { include: { category: { select: { slug: true } } } },
+      // Only approved, active products are public (vendor products wait for admin approval).
+      where: { status: "active", approvalStatus: "approved" },
+      select: {
+        id: true,
+        slug: true,
+        name: true,
+        brand: true,
+        description: true,
+        isFeatured: true,
+        createdAt: true,
+        images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1, select: { imageUrl: true } },
+        categories: { select: { category: { select: { slug: true } } } },
         variants: {
           where: { status: "active" },
           orderBy: { sellingPrice: "asc" },
-          include: { inventory: true },
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            modelNumber: true,
+            sellingPrice: true,
+            compareAtPrice: true,
+            inventory: { select: { quantityInStock: true } },
+          },
         },
       },
     }),
@@ -77,9 +93,8 @@ export async function loadFromDb(): Promise<CatalogueRow[]> {
       multipleVariants: p.variants.length > 1,
       inStock: p.variants.some((x) => (x.inventory?.quantityInStock ?? 0) > 0),
       isNew: now - createdAtMs < NEW_WINDOW_MS,
-      description: p.description,
       categorySlugs: slugs,
-      searchText: [p.name, p.brand, p.description, ...p.variants.flatMap((x) => [x.sku, x.modelNumber, x.name])]
+      searchText: [p.name, p.brand, p.description?.slice(0, 200), ...p.variants.flatMap((x) => [x.sku, x.modelNumber, x.name])]
         .filter(Boolean)
         .join(" ")
         .toLowerCase(),
@@ -91,9 +106,42 @@ export async function loadFromDb(): Promise<CatalogueRow[]> {
   return rows;
 }
 
-// Cached briefly so a burst of visitors doesn't reload the whole catalogue each time.
-// Staff changes appear within a minute; call revalidateTag("catalogue") after admin edits (Phase 6).
-const loadCached = unstable_cache(loadFromDb, ["catalogue-rows-v1"], { revalidate: 60, tags: ["catalogue"] });
+// ── In-process cache ──
+// The catalogue is about 3 MB, over the 2 MB limit of Next's data cache, so it lives in this
+// process's memory instead. Concurrent requests share one load, and if a reload fails the previous
+// rows keep being served. With several server processes each one keeps its own copy (so a change
+// can take up to CACHE_TTL_MS to appear everywhere).
+const CACHE_TTL_MS = 60_000;
+type CacheState = { rows?: CatalogueRow[]; loadedAt: number; inflight?: Promise<CatalogueRow[]> };
+const g = globalThis as unknown as { __catalogueCache?: CacheState };
+const cache: CacheState = (g.__catalogueCache ??= { loadedAt: 0 });
+
+/** Call after catalogue edits (admin dashboard, Phase 6) so changes show immediately. */
+export function invalidateCatalogue(): void {
+  cache.loadedAt = 0;
+}
+
+async function loadCached(): Promise<CatalogueRow[]> {
+  const fresh = cache.rows && Date.now() - cache.loadedAt < CACHE_TTL_MS;
+  if (fresh) return cache.rows!;
+  cache.inflight ??= loadFromDb()
+    .then((rows) => {
+      cache.rows = rows;
+      cache.loadedAt = Date.now();
+      return rows;
+    })
+    .catch((err) => {
+      if (cache.rows) {
+        console.error("catalogue reload failed, serving the previous copy", err);
+        return cache.rows;
+      }
+      throw err;
+    })
+    .finally(() => {
+      cache.inflight = undefined;
+    });
+  return cache.inflight;
+}
 
 /** All active products. Set USE_MOCK_DATA=true to use the built-in samples (no database needed). */
 export async function getCatalogue(): Promise<CatalogueRow[]> {
@@ -131,7 +179,7 @@ export async function getProductDetail(slug: string): Promise<ProductDetail | nu
   if (useMock()) return sampleDetail(slug);
 
   const p = await db.product.findFirst({
-    where: { slug, status: "active" },
+    where: { slug, status: "active", approvalStatus: "approved" },
     include: {
       images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] },
       specifications: { orderBy: { sortOrder: "asc" } },

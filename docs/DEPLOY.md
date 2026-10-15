@@ -74,3 +74,12 @@ pm2 restart multiss
 - Email provider with SPF and DKIM on the domain (password reset emails).
 - PayFast live credentials (`PAYFAST_SANDBOX=false`) and the notify URL set in the PayFast dashboard.
 - Replace placeholder contact details in `src/config/site.ts` and the seed's VAT number.
+
+## PayFast (Phase 4)
+
+1. Create the PayFast sandbox account and put its merchant ID, key and passphrase in `.env` (`PAYFAST_SANDBOX="true"`).
+2. `NEXT_PUBLIC_SITE_URL` must be the public **https** address. PayFast calls `NEXT_PUBLIC_SITE_URL/api/payfast/notify`
+   from its own servers, so it must be reachable from the internet and Nginx must pass `X-Forwarded-For` (it is used to
+   check the caller is really PayFast) and `X-Forwarded-Proto`.
+3. Never set `PAYFAST_DEV_SIMULATE`, `PAYFAST_SKIP_SERVER_CONFIRM` or `PAYFAST_CHECK_IP` on staging or production.
+4. Going live: new live merchant ID/key/passphrase, `PAYFAST_SANDBOX="false"`, then place a small real order and refund it.

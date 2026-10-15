@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { MessageSquareText, ShoppingCart } from "lucide-react";
+import { MessageSquareText } from "lucide-react";
+import { AddToCart } from "@/components/cart/AddToCart";
 import { categories } from "@/config/site";
 import { getProductDetail, getRelatedProducts } from "@/lib/catalogue";
 import { exclusiveFromInclusive, formatZar } from "@/lib/vat";
@@ -124,11 +125,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
           <div className="mt-6 space-y-4 border-y border-line py-5">
             <StockStatus stock={variant.stock} />
             {inStock ? (
-              // Phase 3/4: becomes a real add-to-cart action with a quantity; guests are sent to log in first.
-              <Link href={`/login?next=${encodeURIComponent(productHref)}`} className={buttonClass({ size: "lg", className: "w-full sm:w-auto sm:min-w-64" })}>
-                <ShoppingCart className="h-5 w-5" aria-hidden />
-                Add to cart
-              </Link>
+              <AddToCart variantId={variant.id} back={productHref} size="lg" withQuantity maxQuantity={variant.stock} />
             ) : (
               <span aria-disabled className={buttonClass({ variant: "secondary", size: "lg", className: "w-full opacity-60 sm:w-auto sm:min-w-64" })}>
                 Out of stock

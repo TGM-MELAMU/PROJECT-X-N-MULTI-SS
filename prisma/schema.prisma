@@ -4,7 +4,8 @@
 // After any SQL migration, run `npm run db:pull` (then re-check this file) and `npm run db:generate`.
 
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "client"
 }
 
 datasource db {
@@ -177,6 +178,8 @@ model User {
   phone        String?    @db.VarChar(30)
   passwordHash String     @map("password_hash") @db.VarChar(255)
   status       UserStatus @default(active)
+  /// When the customer accepted the terms and privacy policy at registration (POPIA consent record)
+  termsAcceptedAt DateTime? @map("terms_accepted_at") @db.Timestamp(0)
   createdAt    DateTime?  @default(now()) @map("created_at") @db.Timestamp(0)
   updatedAt    DateTime?  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(0)
 

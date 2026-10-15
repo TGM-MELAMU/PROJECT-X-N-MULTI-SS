@@ -1,18 +1,21 @@
 /**
- * Dev seed. Idempotent: safe to run repeatedly (upserts by slug / SKU / email).
+ * Dev seed. Idempotent: safe to run repeatedly.
  *
  *   npm run db:migrate && npm run db:seed
  *
- * Product data lives in ./sample-data.ts (placeholders; replace before launch).
+ * What it does by default (safe on the real imported catalogue):
+ *   - makes sure the roles and the 8 site categories exist
+ *   - makes sure a first-party MultiSS vendor exists (reuses the existing one if there is one)
+ *   - creates admin@multiss.co.za when SEED_ADMIN_PASSWORD is set
+ *
+ * Placeholder products (prisma/sample-data.ts) are only added when SEED_SAMPLE_PRODUCTS=true AND the
+ * database has no products yet. They are for an empty development database, never for the real catalogue.
  */
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { db } from "../src/lib/db";
 import { SAMPLE_CATEGORIES, SAMPLE_PRODUCTS, slugify } from "./sample-data";
 
-const db = new PrismaClient();
-
 async function main() {
-  // Roles (also created by migration 001; kept here so seed works on its own)
   for (const [name, description] of [
     ["admin", "MultiSS administrator"],
     ["customer", "Registered MultiSS customer"],
@@ -21,24 +24,38 @@ async function main() {
     await db.role.upsert({ where: { name }, update: {}, create: { name, description } });
   }
 
-  // First-party MultiSS vendor (owns all seeded products)
-  const vendor = await db.vendor.upsert({
-    where: { vatNumber: "REPLACE-WITH-MULTISS-VAT" },
-    update: {},
-    create: {
-      type: "multiss",
-      companyName: "Multi Success Supplies (Pty) Ltd",
-      vatNumber: "REPLACE-WITH-MULTISS-VAT",
-      emailAddress: "info@multiss.co.za",
-      primaryContactNumber: "0000000000",
-      billingAddressLine1: "REPLACE WITH REAL ADDRESS",
-      billingCity: "Johannesburg",
-      billingProvince: "Gauteng",
-      billingPostalCode: "0000",
-    },
-  });
+  const cats = new Map<string, number>();
+  for (const [name, slug] of SAMPLE_CATEGORIES) {
+    const c = await db.category.upsert({
+      where: { slug },
+      update: {},
+      create: { name, slug, description: `${name} for laboratories and medical professionals` },
+    });
+    cats.set(slug, c.id);
+  }
 
-  // Dev admin — only if a password is supplied; never hard-code credentials.
+  // The first-party vendor. The imported data already has one (type "multiss"); only create a
+  // placeholder when there is none, and say so loudly because it needs real details.
+  let vendor = await db.vendor.findFirst({ where: { type: "multiss" } });
+  if (vendor) {
+    console.log(`Using existing MultiSS vendor #${vendor.id} (${vendor.companyName})`);
+  } else {
+    vendor = await db.vendor.create({
+      data: {
+        type: "multiss",
+        companyName: "Multi Success Supplies (Pty) Ltd",
+        vatNumber: "REPLACE-WITH-MULTISS-VAT",
+        emailAddress: "info@multiss.co.za",
+        primaryContactNumber: "0000000000",
+        billingAddressLine1: "REPLACE WITH REAL ADDRESS",
+        billingCity: "Johannesburg",
+        billingProvince: "Gauteng",
+        billingPostalCode: "0000",
+      },
+    });
+    console.warn("Created a PLACEHOLDER MultiSS vendor. Replace its VAT number and address with the real ones.");
+  }
+
   const adminPassword = process.env.SEED_ADMIN_PASSWORD;
   if (adminPassword) {
     const admin = await db.user.upsert({
@@ -62,34 +79,34 @@ async function main() {
     console.log("SEED_ADMIN_PASSWORD not set: skipped admin user");
   }
 
-  const cats = new Map<string, number>();
-  for (const [name, slug] of SAMPLE_CATEGORIES) {
-    const c = await db.category.upsert({
-      where: { slug },
-      update: { name },
-      create: { name, slug, description: `${name} for laboratories and medical professionals` },
-    });
-    cats.set(slug, c.id);
+  if (process.env.SEED_SAMPLE_PRODUCTS === "true") {
+    const existing = await db.product.count();
+    if (existing > 0) {
+      console.log(`Skipped sample products: the database already has ${existing} products.`);
+    } else {
+      await seedSampleProducts(vendor.id, cats);
+    }
   }
+}
 
+async function seedSampleProducts(vendorId: number, cats: Map<string, number>) {
   for (const p of SAMPLE_PRODUCTS) {
     const slug = slugify(p.name);
     const product = await db.product.upsert({
       where: { slug },
       update: {},
       create: {
-        vendorId: vendor.id,
+        vendorId,
         name: p.name,
         slug,
         brand: p.brand,
         description: p.desc,
         status: "active",
+        approvalStatus: "approved",
         isFeatured: !!p.featured,
       },
     });
 
-    // Special-offer products are found by their compare-at price in the app, so only the
-    // product's own category is linked here.
     const categoryId = cats.get(p.category);
     if (!categoryId) throw new Error(`Unknown category slug: ${p.category}`);
     await db.productCategory.upsert({
@@ -119,11 +136,8 @@ async function main() {
       },
     });
 
-    const existing = await db.inventory.findUnique({ where: { variantId: variant.id } });
-    if (!existing) {
-      await db.inventory.create({
-        data: { variantId: variant.id, quantityInStock: p.stock, reorderLevel: 3 },
-      });
+    if (!(await db.inventory.findUnique({ where: { variantId: variant.id } }))) {
+      await db.inventory.create({ data: { variantId: variant.id, quantityInStock: p.stock, reorderLevel: 3 } });
       if (p.stock > 0) {
         await db.inventoryMovement.create({
           data: {
@@ -138,8 +152,7 @@ async function main() {
       }
     }
   }
-
-  console.log(`Seeded ${SAMPLE_CATEGORIES.length} categories, ${SAMPLE_PRODUCTS.length} products.`);
+  console.log(`Seeded ${SAMPLE_PRODUCTS.length} placeholder products.`);
 }
 
 main()

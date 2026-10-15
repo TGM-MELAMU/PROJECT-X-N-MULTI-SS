@@ -31,7 +31,6 @@ export function sampleRows(now = Date.now()): CatalogueRow[] {
       multipleVariants: false,
       inStock: s.stock > 0,
       isNew: now - createdAtMs < NEW_WINDOW_MS,
-      description: s.desc,
       categorySlugs: [s.category],
       searchText: [s.name, s.brand, s.desc, s.sku, s.model, s.variant].filter(Boolean).join(" ").toLowerCase(),
       createdAtMs,

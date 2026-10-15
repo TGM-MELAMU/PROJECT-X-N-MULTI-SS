@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/Badge";
 import { buttonClass } from "@/components/ui/Button";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { Price } from "@/components/ui/Price";
-import { ShoppingCart } from "lucide-react";
+import { AddToCart } from "@/components/cart/AddToCart";
 import type { ProductSummary } from "@/lib/catalogue";
 
 export function ProductCard({ product }: { product: ProductSummary }) {
@@ -46,14 +46,7 @@ export function ProductCard({ product }: { product: ProductSummary }) {
         <Price cents={product.priceCents} wasCents={product.wasCents} from={product.multipleVariants} />
 
         {product.inStock ? (
-          // Phase 3/4: becomes a real add-to-cart action; guests are sent to log in first.
-          <Link
-            href={`/login?next=${encodeURIComponent(href)}`}
-            className={buttonClass({ size: "md", className: "mt-auto w-full" })}
-          >
-            <ShoppingCart className="h-4 w-4" aria-hidden />
-            Add to cart
-          </Link>
+          <AddToCart variantId={product.variantId} back={href} className="mt-auto" />
         ) : (
           <span
             className={buttonClass({ variant: "secondary", size: "md", className: "mt-auto w-full opacity-60" })}

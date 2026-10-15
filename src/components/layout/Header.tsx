@@ -6,10 +6,10 @@ import { Logo } from "./Logo";
 import { SearchForm } from "./SearchForm";
 import { TrustBar } from "./TrustBar";
 
-export function Header({ cartCount = 0 }: { cartCount?: number }) {
+export function Header({ cartCount = 0, user = null }: { cartCount?: number; user?: { firstName: string } | null }) {
   return (
     <header className="sticky top-0 z-40 bg-surface shadow-[0_1px_0_var(--tw-shadow-color)] shadow-line">
-      <TrustBar />
+      <TrustBar user={user} />
 
       <div className="shell flex items-center gap-3 py-3 md:gap-8">
         {/* Mobile menu: native <details>, so it needs no JavaScript. */}
@@ -62,7 +62,7 @@ export function Header({ cartCount = 0 }: { cartCount?: number }) {
             className="flex items-center gap-2 rounded-control px-2.5 py-2 text-sm font-medium hover:bg-surface-muted"
           >
             <User className="h-[1.35rem] w-[1.35rem]" aria-hidden />
-            <span className="hidden lg:inline">Account</span>
+            <span className="hidden lg:inline">{user ? user.firstName : "Account"}</span>
             <span className="sr-only lg:hidden">Account</span>
           </Link>
           <Link

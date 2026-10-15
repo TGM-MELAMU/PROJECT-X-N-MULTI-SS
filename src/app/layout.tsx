@@ -4,6 +4,8 @@ import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 import { MobileTabBar } from "@/components/layout/MobileTabBar";
 import { site } from "@/config/site";
+import { getCurrentUser } from "@/lib/auth/session";
+import { getCartCount } from "@/lib/cart";
 
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
@@ -20,9 +22,10 @@ export const viewport: Viewport = {
   initialScale: 1,
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // Phase 4: read the signed-in user's cart count here and pass it down.
-  const cartCount = 0;
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await getCurrentUser().catch(() => null);
+  const cartCount = user ? await getCartCount(user.id).catch(() => 0) : 0;
+  const who = user ? { firstName: user.firstName } : null;
 
   return (
     <html lang="en-ZA">
@@ -33,7 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           Skip to content
         </a>
-        <Header cartCount={cartCount} />
+        <Header cartCount={cartCount} user={who} />
         <main id="main" className="flex-1 pb-16 md:pb-0">
           {children}
         </main>

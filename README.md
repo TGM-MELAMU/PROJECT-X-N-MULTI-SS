@@ -65,11 +65,56 @@ See `docs/PHASE0.md` for decisions, open questions and the re-scoped plan.
 
 - The whole active catalogue is loaded into memory and filtered in code. Fine for up to a few thousand products;
   beyond that, move filtering into SQL. Results are cached for 60 s. When the admin dashboard (Phase 6) edits products,
-  call `revalidateTag("catalogue")` so changes show immediately.
+  call `invalidateCatalogue()` (`src/lib/catalogue.ts`) so changes show immediately.
 - "Special Offers" is derived: any product with a compare-at price above its price. Nobody has to tag it.
 - Navigation categories come from `src/config/site.ts`. Categories added later in the admin will not appear in the
   menu until the menu reads from the database.
 - Price sorting and the card price use the cheapest in-stock variant. Products with several variants show "From".
 - Legal pages are skeletons with a visible draft notice (`site.legalDraft`). Do not publish them as they are.
 - The product photo gallery has not been exercised yet because no product has photos. Test it with the first real photos.
-- "Add to cart" still only sends guests to log in (Phases 3 and 4).
+- "Add to cart" sends guests to log in and brings them back to the product (Phase 4 made the cart real).
+
+## Phase 3 notes (accounts)
+
+- **Setup after pulling this phase:** `npm install`, `npm run db:generate` (Prisma now uses the engine-less client with the
+  MariaDB/MySQL driver adapter, so no native engine download), then `npm run db:migrate` to apply `002_categories_and_consent.sql`
+  (adds `users.terms_accepted_at` and the 8 categories). Set `AUTH_SECRET`, `AUTH_URL` and `NEXT_PUBLIC_SITE_URL` in `.env`.
+- Pages: `/register`, `/login`, `/forgot-password`, `/reset-password?token=...`, `/account`. Log out is a button in the header.
+- Guards: `src/middleware.ts` sends guests from `/cart`, `/checkout`, `/account` and `/admin` to `/login?next=...`, and sends
+  non-admins away from `/admin`. The middleware only reads the cookie (it never writes one, see the comment in the file).
+  Real checks are in `getCurrentUser()` (`src/lib/auth/session.ts`), which also reads the user from the database.
+- `next` after login is passed through `safeNext()`: only same-site paths are accepted, so `//evil.com`, `https://...` and
+  backslash tricks all land on `/account`.
+- Passwords: bcrypt cost 12, 8 to 72 bytes, a short common-password list is refused. Changing the password (reset) signs out
+  every older session, because the session carries a fingerprint of the password hash.
+- Reset links: random 32-byte token, only its SHA-256 is stored in `user_tokens`, valid 1 hour, single use, and a newer link
+  cancels older ones. The reply to "forgot password" is identical whether or not the email has an account.
+- Email: with `EMAIL_API_KEY` set, mail goes out through Resend (`src/lib/email.ts`). Without it, the message, including the
+  reset link, is printed to the server console, which is how to test locally. To use another provider, change `sendEmail()` only.
+- Rate limits (login, register, forgot, reset) are in the memory of one server process (`src/lib/auth/rate-limit.ts`).
+  That is fine for the single-process launch setup; move them to the database or Redis if you run several processes.
+- Tests: `npm test` (unit) and `scripts/e2e-auth.cjs` (browser flow against a running server and a **development** database;
+  see the header of that file). Never run the e2e script against production, it deletes `e2e-*@example.com` users.
+- The imported development dump contains test users with unusable password hashes, and one test customer has the `admin` role.
+  Do not carry those users into production; create the first real admin by running `npm run db:seed` with `SEED_ADMIN_PASSWORD` set (it creates `admin@multiss.co.za`), then change the password.
+
+## Phase 4 notes (cart, checkout, payment)
+
+- **Flow:** Add to cart (login needed) -> `/cart` -> `/checkout` (delivery address) -> order is created as `pending_payment`
+  and the stock is *not* touched yet -> `/checkout/pay/<order>` posts a signed form to PayFast -> PayFast calls
+  `/api/payfast/notify` (server to server) -> the order becomes `confirmed`, the payment `successful`, stock is reduced
+  and an `inventory_movements` row is written. The page the customer returns to (`/order/<order>`) only *shows* the status;
+  it never marks anything paid.
+- **Notification checks** (`src/app/api/payfast/notify/route.ts`): signature, PayFast's own IP, amount equals our order total,
+  and PayFast's "validate" call. Any failure returns 400 and changes nothing. A repeat of the same notification does nothing.
+- **Prices** are re-read from the database when the order is created, so the browser can't change what is charged.
+  Delivery is "To be confirmed" (R 0) until the client sets a fee: `SHIPPING_FLAT_CENTS` / `SHIPPING_FREE_OVER_CENTS`.
+- **Vendors:** each order is split into one `vendor_orders` row per seller, with commission taken from the product rule, then
+  the category rule, otherwise 0%. No commission rules exist yet, so vendor net equals the line total until the admin sets them.
+- **Testing without PayFast reaching you:** PayFast can't call `localhost`. Either expose the site with a tunnel (ngrok,
+  Cloudflare Tunnel) and set `NEXT_PUBLIC_SITE_URL` to that address, or set `PAYFAST_DEV_SIMULATE=true` locally and use the
+  "Simulate a successful payment" button on an unpaid order's page.
+- **Tests:** `npm test` (41 unit tests) and `scripts/e2e-shop.cjs` (browser test of the whole flow against a *dev* server started
+  with `next dev` and a *dev* database; the header of that file lists the env it needs).
+- **Not built yet:** cancelling an unpaid order, refunds, and emails to the customer and vendors (planned for the admin phase).
+  An order left unpaid keeps its items reserved in that order, not in the cart; the customer can pay it from `/account/orders`.
