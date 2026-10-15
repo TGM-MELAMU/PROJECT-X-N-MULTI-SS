@@ -1019,3 +1019,5 @@ $router->post(
         );
     }
 );
+
+require_once __DIR__ . '/admin.php';
