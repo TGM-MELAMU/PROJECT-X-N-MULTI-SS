@@ -13,6 +13,7 @@ use RuntimeException;
 
 final class PaymentService
 {
+    use \MultiSS\Services\Concerns\DemoPaymentOperations;
     private PaymentRepository $payments;
 
     private array $config;

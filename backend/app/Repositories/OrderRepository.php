@@ -24,10 +24,11 @@ final class OrderRepository
 
     public function createPendingOrder(
         int $userId,
-        int $addressId,
+        ?int $addressId,
         string $recipientName,
         string $contactNumber,
-        string $orderNumber
+        string $orderNumber,
+        array $fulfillment
     ): array {
         $cartRepository =
             new CartRepository(
@@ -43,42 +44,47 @@ final class OrderRepository
 
         try {
             /*
-             * Lock and verify the selected address belongs
-             * to the authenticated customer.
+             * A saved customer address is required only
+             * when this order is being delivered.
              */
-            $addressStatement = $this->pdo->prepare(
-                '
-                SELECT
-                    address_id,
-                    address_line_1,
-                    address_line_2,
-                    city,
-                    province,
-                    postal_code,
-                    country
-                FROM addresses
-                WHERE
-                    address_id = :address_id
-                    AND user_id = :user_id
-                LIMIT 1
-                FOR UPDATE
-                '
-            );
+            $address = null;
 
-            $addressStatement->execute([
-                'address_id' => $addressId,
-                'user_id' => $userId,
-            ]);
+            if ($addressId !== null) {
+                $addressStatement =
+                    $this->pdo->prepare(
+                        '
+                        SELECT
+                            address_id,
+                            address_line_1,
+                            address_line_2,
+                            city,
+                            province,
+                            postal_code,
+                            country
+                        FROM addresses
+                        WHERE
+                            address_id = :address_id
+                            AND user_id = :user_id
+                        LIMIT 1
+                        FOR UPDATE
+                        '
+                    );
 
-            $address = $addressStatement->fetch();
+                $addressStatement->execute([
+                    'address_id' => $addressId,
+                    'user_id' => $userId,
+                ]);
 
-            if ($address === false) {
-                throw new OutOfBoundsException(
-                    'Address not found.'
-                );
+                $address =
+                    $addressStatement->fetch();
+
+                if ($address === false) {
+                    throw new OutOfBoundsException(
+                        'Address not found.'
+                    );
+                }
             }
-
-            /*
+/*
              * Lock the customer's active cart.
              */
             $cartStatement = $this->pdo->prepare(
@@ -319,9 +325,24 @@ final class OrderRepository
                 );
 
             /*
-             * Delivery placeholder for Phase 4.
+             * Delivery is recalculated server-side by
+             * DeliveryService immediately before this
+             * transaction. Never use a frontend price.
              */
-            $shippingCents = 0;
+            $shippingCents =
+                $this->moneyToCents(
+                    number_format(
+                        (float) (
+                            $fulfillment[
+                                'delivery_fee'
+                            ]
+                            ?? 0
+                        ),
+                        2,
+                        '.',
+                        ''
+                    )
+                );
 
             $totalCents =
                 $subtotalCents
@@ -388,69 +409,75 @@ final class OrderRepository
 
             $orderId =
                 (int) $this->pdo->lastInsertId();
-
             /*
-             * Snapshot the address.
-             *
-             * The order address remains unchanged even if
-             * the customer later edits their saved address.
+             * Snapshot the customer's delivery address.
+             * Collection orders do not require one.
              */
-            $orderAddressStatement =
-                $this->pdo->prepare(
-                    '
-                    INSERT INTO order_addresses (
-                        order_id,
-                        recipient_name,
-                        contact_number,
-                        address_line_1,
-                        address_line_2,
-                        city,
-                        province,
-                        postal_code,
-                        country
-                    )
-                    VALUES (
-                        :order_id,
-                        :recipient_name,
-                        :contact_number,
-                        :address_line_1,
-                        :address_line_2,
-                        :city,
-                        :province,
-                        :postal_code,
-                        :country
-                    )
-                    '
-                );
+            if ($address !== null) {
+                $orderAddressStatement =
+                    $this->pdo->prepare(
+                        '
+                        INSERT INTO order_addresses (
+                            order_id,
+                            recipient_name,
+                            contact_number,
+                            address_line_1,
+                            address_line_2,
+                            city,
+                            province,
+                            postal_code,
+                            country
+                        )
+                        VALUES (
+                            :order_id,
+                            :recipient_name,
+                            :contact_number,
+                            :address_line_1,
+                            :address_line_2,
+                            :city,
+                            :province,
+                            :postal_code,
+                            :country
+                        )
+                        '
+                    );
 
-            $orderAddressStatement->execute([
-                'order_id' =>
-                    $orderId,
+                $orderAddressStatement->execute([
+                    'order_id' =>
+                        $orderId,
 
-                'recipient_name' =>
-                    $recipientName,
+                    'recipient_name' =>
+                        $recipientName,
 
-                'contact_number' =>
-                    $contactNumber,
+                    'contact_number' =>
+                        $contactNumber,
 
-                'address_line_1' =>
-                    $address['address_line_1'],
+                    'address_line_1' =>
+                        $address[
+                            'address_line_1'
+                        ],
 
-                'address_line_2' =>
-                    $address['address_line_2'],
+                    'address_line_2' =>
+                        $address[
+                            'address_line_2'
+                        ],
 
-                'city' =>
-                    $address['city'],
+                    'city' =>
+                        $address['city'],
 
-                'province' =>
-                    $address['province'],
+                    'province' =>
+                        $address['province'],
 
-                'postal_code' =>
-                    $address['postal_code'],
+                    'postal_code' =>
+                        $address[
+                            'postal_code'
+                        ],
 
-                'country' =>
-                    $address['country'],
-            ]);
+                    'country' =>
+                        $address['country'],
+                ]);
+            }
+
 
             /*
              * One vendor_order per vendor.
@@ -629,7 +656,159 @@ final class OrderRepository
                         ),
                 ]);
             }
+            /*
+             * Preserve the fulfillment calculation used
+             * when this historical order was created.
+             */
+            $collection =
+                is_array(
+                    $fulfillment[
+                        'collection_location'
+                    ]
+                    ?? null
+                )
+                    ? $fulfillment[
+                        'collection_location'
+                    ]
+                    : null;
 
+            $fulfillmentStatement =
+                $this->pdo->prepare(
+                    '
+                    INSERT INTO order_fulfillments (
+                        order_id,
+                        fulfillment_method,
+                        delivery_method,
+                        delivery_fee,
+                        calculated_distance_km,
+                        collection_location_id,
+                        collection_name,
+                        collection_contact_number,
+                        collection_address_line_1,
+                        collection_address_line_2,
+                        collection_city,
+                        collection_province,
+                        collection_postal_code,
+                        collection_country,
+                        fulfillment_status
+                    )
+                    VALUES (
+                        :order_id,
+                        :fulfillment_method,
+                        :delivery_method,
+                        :delivery_fee,
+                        :calculated_distance_km,
+                        :collection_location_id,
+                        :collection_name,
+                        :collection_contact_number,
+                        :collection_address_line_1,
+                        :collection_address_line_2,
+                        :collection_city,
+                        :collection_province,
+                        :collection_postal_code,
+                        :collection_country,
+                        \'payment_pending\'
+                    )
+                    '
+                );
+
+            $fulfillmentStatement->execute([
+                'order_id' =>
+                    $orderId,
+
+                'fulfillment_method' =>
+                    $fulfillment[
+                        'fulfillment_method'
+                    ],
+
+                'delivery_method' =>
+                    $fulfillment[
+                        'delivery_method'
+                    ],
+
+                'delivery_fee' =>
+                    $this->centsToMoney(
+                        $shippingCents
+                    ),
+
+                'calculated_distance_km' =>
+                    $fulfillment[
+                        'calculated_distance_km'
+                    ],
+
+                'collection_location_id' =>
+                    $collection[
+                        'collection_location_id'
+                    ] ?? null,
+
+                'collection_name' =>
+                    $collection[
+                        'location_name'
+                    ] ?? null,
+
+                'collection_contact_number' =>
+                    $collection[
+                        'contact_number'
+                    ] ?? null,
+
+                'collection_address_line_1' =>
+                    $collection[
+                        'address_line_1'
+                    ] ?? null,
+
+                'collection_address_line_2' =>
+                    $collection[
+                        'address_line_2'
+                    ] ?? null,
+
+                'collection_city' =>
+                    $collection[
+                        'city'
+                    ] ?? null,
+
+                'collection_province' =>
+                    $collection[
+                        'province'
+                    ] ?? null,
+
+                'collection_postal_code' =>
+                    $collection[
+                        'postal_code'
+                    ] ?? null,
+
+                'collection_country' =>
+                    $collection[
+                        'country'
+                    ] ?? null,
+            ]);
+
+            /*
+             * Phase 7:
+             * Create the initial pending payment
+             * inside the same transaction as the order.
+             */
+            $paymentConfig =
+                require __DIR__
+                    . '/../../config/payment_runtime.php';
+
+            $paymentRecords =
+                new PaymentRecordRepository(
+                    $this->pdo
+                );
+
+            $paymentRecords
+                ->createInitialPending(
+                    $orderId,
+                    $this->centsToMoney(
+                        $totalCents
+                    ),
+                    (string) $paymentConfig[
+                        'gateway'
+                    ],
+                    (string) $paymentConfig[
+                        'payment_method'
+                    ]
+                );
             /*
              * The cart has now become this order.
              *
@@ -1186,5 +1365,621 @@ public function findCustomerOrderByNumber(
             '.',
             ''
         );
+    }
+
+    public function listCustomerOrders(
+        int $userId,
+        int $page,
+        int $perPage
+    ): array {
+        $offset =
+            ($page - 1) * $perPage;
+
+        $countStatement =
+            $this->pdo->prepare(
+                '
+                SELECT COUNT(*)
+                FROM orders
+                WHERE user_id = :user_id
+                '
+            );
+
+        $countStatement->execute([
+            'user_id' => $userId,
+        ]);
+
+        $total =
+            (int) $countStatement
+                ->fetchColumn();
+
+        $statement =
+            $this->pdo->prepare(
+                '
+                SELECT
+                    o.order_id,
+                    o.order_number,
+                    o.subtotal,
+                    o.vat_amount,
+                    o.shipping_amount,
+                    o.total_amount,
+                    o.order_status,
+                    o.created_at,
+
+                    ofl.fulfillment_method,
+                    ofl.delivery_method,
+                    ofl.fulfillment_status,
+
+                    (
+                        SELECT p.payment_status
+                        FROM payments p
+                        WHERE p.order_id = o.order_id
+                        ORDER BY
+                            CASE
+                                WHEN p.payment_status =
+                                    \'successful\'
+                                THEN 0
+                                ELSE 1
+                            END,
+                            p.payment_id DESC
+                        LIMIT 1
+                    ) AS payment_status
+
+                FROM orders o
+
+                LEFT JOIN order_fulfillments ofl
+                    ON ofl.order_id = o.order_id
+
+                WHERE o.user_id = :user_id
+
+                ORDER BY
+                    o.created_at DESC,
+                    o.order_id DESC
+
+                LIMIT '
+                . (int) $perPage
+                . ' OFFSET '
+                . (int) $offset
+            );
+
+        $statement->execute([
+            'user_id' => $userId,
+        ]);
+
+        $orders =
+            array_map(
+                static function (
+                    array $order
+                ): array {
+                    return [
+                        'order_id' =>
+                            (int) $order[
+                                'order_id'
+                            ],
+
+                        'order_number' =>
+                            (string) $order[
+                                'order_number'
+                            ],
+
+                        'order_status' =>
+                            (string) $order[
+                                'order_status'
+                            ],
+
+                        'payment_status' =>
+                            $order[
+                                'payment_status'
+                            ],
+
+                        'fulfillment_method' =>
+                            $order[
+                                'fulfillment_method'
+                            ],
+
+                        'delivery_method' =>
+                            $order[
+                                'delivery_method'
+                            ],
+
+                        'fulfillment_status' =>
+                            $order[
+                                'fulfillment_status'
+                            ],
+
+                        'subtotal' =>
+                            (float) $order[
+                                'subtotal'
+                            ],
+
+                        'vat_amount' =>
+                            (float) $order[
+                                'vat_amount'
+                            ],
+
+                        'shipping_amount' =>
+                            (float) $order[
+                                'shipping_amount'
+                            ],
+
+                        'total_amount' =>
+                            (float) $order[
+                                'total_amount'
+                            ],
+
+                        'created_at' =>
+                            $order[
+                                'created_at'
+                            ],
+                    ];
+                },
+                $statement->fetchAll()
+            );
+
+        return [
+            'orders' => $orders,
+
+            'meta' => [
+                'page' =>
+                    $page,
+
+                'per_page' =>
+                    $perPage,
+
+                'total' =>
+                    $total,
+
+                'total_pages' =>
+                    $total === 0
+                        ? 0
+                        : (int) ceil(
+                            $total
+                            / $perPage
+                        ),
+            ],
+        ];
+    }
+
+    public function findCustomerFulfillmentByOrderId(
+        int $orderId
+    ): ?array {
+        $statement =
+            $this->pdo->prepare(
+                '
+                SELECT
+                    order_fulfillment_id,
+                    fulfillment_method,
+                    delivery_method,
+                    delivery_fee,
+                    calculated_distance_km,
+                    collection_location_id,
+                    collection_name,
+                    collection_contact_number,
+                    collection_address_line_1,
+                    collection_address_line_2,
+                    collection_city,
+                    collection_province,
+                    collection_postal_code,
+                    collection_country,
+                    fulfillment_status,
+                    created_at,
+                    updated_at
+
+                FROM order_fulfillments
+
+                WHERE order_id = :order_id
+
+                LIMIT 1
+                '
+            );
+
+        $statement->execute([
+            'order_id' => $orderId,
+        ]);
+
+        $fulfillment =
+            $statement->fetch();
+
+        if ($fulfillment === false) {
+            return null;
+        }
+
+        $shipmentStatement =
+            $this->pdo->prepare(
+                '
+                SELECT
+                    shipment_id,
+                    vendor_order_id,
+                    courier_provider,
+                    provider_shipment_reference,
+                    tracking_reference,
+                    shipment_status,
+                    shipped_at,
+                    delivered_at,
+                    created_at,
+                    updated_at
+
+                FROM shipments
+
+                WHERE order_id = :order_id
+
+                ORDER BY shipment_id ASC
+                '
+            );
+
+        $shipmentStatement->execute([
+            'order_id' => $orderId,
+        ]);
+
+        $shipments =
+            array_map(
+                static function (
+                    array $shipment
+                ): array {
+                    $shipment[
+                        'shipment_id'
+                    ] =
+                        (int) $shipment[
+                            'shipment_id'
+                        ];
+
+                    $shipment[
+                        'vendor_order_id'
+                    ] =
+                        $shipment[
+                            'vendor_order_id'
+                        ] !== null
+                            ? (int) $shipment[
+                                'vendor_order_id'
+                            ]
+                            : null;
+
+                    return $shipment;
+                },
+                $shipmentStatement
+                    ->fetchAll()
+            );
+
+        $collection = null;
+
+        if (
+            $fulfillment[
+                'fulfillment_method'
+            ] === 'collection'
+        ) {
+            $collection = [
+                'collection_location_id' =>
+                    $fulfillment[
+                        'collection_location_id'
+                    ] !== null
+                        ? (int) $fulfillment[
+                            'collection_location_id'
+                        ]
+                        : null,
+
+                'location_name' =>
+                    $fulfillment[
+                        'collection_name'
+                    ],
+
+                'contact_number' =>
+                    $fulfillment[
+                        'collection_contact_number'
+                    ],
+
+                'address_line_1' =>
+                    $fulfillment[
+                        'collection_address_line_1'
+                    ],
+
+                'address_line_2' =>
+                    $fulfillment[
+                        'collection_address_line_2'
+                    ],
+
+                'city' =>
+                    $fulfillment[
+                        'collection_city'
+                    ],
+
+                'province' =>
+                    $fulfillment[
+                        'collection_province'
+                    ],
+
+                'postal_code' =>
+                    $fulfillment[
+                        'collection_postal_code'
+                    ],
+
+                'country' =>
+                    $fulfillment[
+                        'collection_country'
+                    ],
+            ];
+        }
+
+        return [
+            'fulfillment_method' =>
+                $fulfillment[
+                    'fulfillment_method'
+                ],
+
+            'delivery_method' =>
+                $fulfillment[
+                    'delivery_method'
+                ],
+
+            'delivery_fee' =>
+                (float) $fulfillment[
+                    'delivery_fee'
+                ],
+
+            'calculated_distance_km' =>
+                $fulfillment[
+                    'calculated_distance_km'
+                ] !== null
+                    ? (float) $fulfillment[
+                        'calculated_distance_km'
+                    ]
+                    : null,
+
+            'fulfillment_status' =>
+                $fulfillment[
+                    'fulfillment_status'
+                ],
+
+            'collection_location' =>
+                $collection,
+
+            'shipments' =>
+                $shipments,
+        ];
+    }
+
+    public function cancelCustomerOrder(
+        int $userId,
+        string $orderNumber,
+        array $allowedStatuses,
+        array $blockedFulfillmentStatuses
+    ): array {
+        $this->pdo->beginTransaction();
+
+        try {
+            $statement =
+                $this->pdo->prepare(
+                    '
+                    SELECT
+                        o.order_id,
+                        o.order_status,
+                        ofl.fulfillment_status,
+
+                        EXISTS (
+                            SELECT 1
+                            FROM payments p
+                            WHERE
+                                p.order_id = o.order_id
+                                AND p.payment_status IN (
+                                    \'successful\',
+                                    \'partially_refunded\'
+                                )
+                        ) AS has_paid_payment
+
+                    FROM orders o
+
+                    LEFT JOIN order_fulfillments ofl
+                        ON ofl.order_id = o.order_id
+
+                    WHERE
+                        o.user_id = :user_id
+                        AND o.order_number =
+                            :order_number
+
+                    LIMIT 1
+                    FOR UPDATE
+                    '
+                );
+
+            $statement->execute([
+                'user_id' =>
+                    $userId,
+
+                'order_number' =>
+                    $orderNumber,
+            ]);
+
+            $order =
+                $statement->fetch();
+
+            if ($order === false) {
+                throw new OutOfBoundsException(
+                    'Order not found.'
+                );
+            }
+
+            if (
+                !in_array(
+                    $order['order_status'],
+                    $allowedStatuses,
+                    true
+                )
+            ) {
+                throw new DomainException(
+                    'This order can no longer be cancelled.'
+                );
+            }
+
+            if (
+                $order['fulfillment_status']
+                !== null
+                && in_array(
+                    $order[
+                        'fulfillment_status'
+                    ],
+                    $blockedFulfillmentStatuses,
+                    true
+                )
+            ) {
+                throw new DomainException(
+                    'This order can no longer be cancelled because fulfillment has progressed.'
+                );
+            }
+
+            $orderId =
+                (int) $order['order_id'];
+
+            $vendorProgressStatement =
+                $this->pdo->prepare(
+                    '
+                    SELECT COUNT(*)
+                    FROM vendor_orders
+                    WHERE
+                        order_id = :order_id
+                        AND vendor_order_status IN (
+                            \'processing\',
+                            \'completed\',
+                            \'refunded\'
+                        )
+                    '
+                );
+
+            $vendorProgressStatement
+                ->execute([
+                    'order_id' =>
+                        $orderId,
+                ]);
+
+            if (
+                (int) $vendorProgressStatement
+                    ->fetchColumn() > 0
+            ) {
+                throw new DomainException(
+                    'This order can no longer be cancelled because vendor fulfillment has progressed.'
+                );
+            }
+
+            $shipmentProgressStatement =
+                $this->pdo->prepare(
+                    '
+                    SELECT COUNT(*)
+                    FROM shipments
+                    WHERE
+                        order_id = :order_id
+                        AND shipment_status IN (
+                            \'packed\',
+                            \'shipped\',
+                            \'out_for_delivery\',
+                            \'delivered\'
+                        )
+                    '
+                );
+
+            $shipmentProgressStatement
+                ->execute([
+                    'order_id' =>
+                        $orderId,
+                ]);
+
+            if (
+                (int) $shipmentProgressStatement
+                    ->fetchColumn() > 0
+            ) {
+                throw new DomainException(
+                    'This order can no longer be cancelled because shipment has progressed.'
+                );
+            }
+
+            $updateOrder =
+                $this->pdo->prepare(
+                    '
+                    UPDATE orders
+                    SET order_status = \'cancelled\'
+                    WHERE order_id = :order_id
+                    '
+                );
+
+            $updateOrder->execute([
+                'order_id' => $orderId,
+            ]);
+
+            $updateVendorOrders =
+                $this->pdo->prepare(
+                    '
+                    UPDATE vendor_orders
+                    SET vendor_order_status =
+                        \'cancelled\'
+                    WHERE
+                        order_id = :order_id
+                        AND vendor_order_status IN (
+                            \'new\',
+                            \'confirmed\'
+                        )
+                    '
+                );
+
+            $updateVendorOrders->execute([
+                'order_id' => $orderId,
+            ]);
+
+            $updateFulfillment =
+                $this->pdo->prepare(
+                    '
+                    UPDATE order_fulfillments
+                    SET fulfillment_status =
+                        \'cancelled\'
+                    WHERE order_id = :order_id
+                    '
+                );
+
+            $updateFulfillment->execute([
+                'order_id' => $orderId,
+            ]);
+
+            $updateShipments =
+                $this->pdo->prepare(
+                    '
+                    UPDATE shipments
+                    SET shipment_status =
+                        \'cancelled\'
+                    WHERE
+                        order_id = :order_id
+                        AND shipment_status IN (
+                            \'pending\',
+                            \'created\'
+                        )
+                    '
+                );
+
+            $updateShipments->execute([
+                'order_id' => $orderId,
+            ]);
+
+            $this->pdo->commit();
+
+            return [
+                'order_id' =>
+                    $orderId,
+
+                'order_number' =>
+                    $orderNumber,
+
+                'order_status' =>
+                    'cancelled',
+
+                /*
+                 * Phase 7 will perform the actual
+                 * demo refund for paid cancellations.
+                 */
+                'refund_required' =>
+                    (bool) $order[
+                        'has_paid_payment'
+                    ],
+            ];
+        } catch (Throwable $exception) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+
+            throw $exception;
+        }
     }
 }

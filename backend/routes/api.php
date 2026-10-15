@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use MultiSS\Controllers\PaymentController;
+use MultiSS\Controllers\DemoPaymentController;
 use MultiSS\Controllers\CartController;
 use MultiSS\Controllers\AdminProductController;
 use MultiSS\Controllers\AuthController;
@@ -762,6 +763,259 @@ $router->post(
 
         $controller->notifyPayFast(
             $request
+        );
+    }
+);
+/*
+|--------------------------------------------------------------------------
+| Phase 6 - Checkout Quote
+|--------------------------------------------------------------------------
+*/
+
+$router->post(
+    '/api/v1/checkout/quote',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new CheckoutController();
+
+        $controller->quote(
+            $request,
+            $user
+        );
+    }
+);
+/*
+|--------------------------------------------------------------------------
+| Phase 6 - Customer Order History
+|--------------------------------------------------------------------------
+*/
+
+$router->get(
+    '/api/v1/orders',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        $controller =
+            new OrderController();
+
+        $controller->index(
+            $request,
+            $user
+        );
+    }
+);
+$router->post(
+    '/api/v1/orders/{orderNumber}/cancel',
+    function (
+        Request $request,
+        array $params
+    ): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $orderNumber =
+            trim(
+                (string) (
+                    $params['orderNumber']
+                    ?? ''
+                )
+            );
+
+        $controller =
+            new OrderController();
+
+        $controller->cancel(
+            $user,
+            $orderNumber
+        );
+    }
+);
+$router->post(
+    '/api/v1/checkout/validate',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new CheckoutController();
+
+        $controller->summary(
+            $request,
+            $user
+        );
+    }
+);
+$router->post(
+    '/api/v1/checkout/create-order',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new CheckoutController();
+
+        $controller->createOrder(
+            $request,
+            $user
+        );
+    }
+);
+/*
+|--------------------------------------------------------------------------
+| Phase 7 - Demo Payments
+|--------------------------------------------------------------------------
+*/
+
+$router->get(
+    '/api/v1/payments/{id}',
+    function (
+        Request $request,
+        array $params
+    ): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        $controller =
+            new DemoPaymentController();
+
+        $controller->show(
+            $user,
+            (string) (
+                $params['id']
+                ?? ''
+            )
+        );
+    }
+);
+
+$router->post(
+    '/api/v1/payments/demo/process',
+    function (Request $request): void {
+        $user =
+            RoleMiddleware::handle(
+                'customer'
+            );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new DemoPaymentController();
+
+        $controller->process(
+            $request,
+            $user
+        );
+    }
+);
+
+$router->post(
+    '/api/v1/payments/webhook',
+    function (Request $request): void {
+        /*
+         * Server-to-server callback.
+         * Authentication is performed by the
+         * payment gateway signature.
+         */
+        $controller =
+            new DemoPaymentController();
+
+        $controller->webhook(
+            $request
+        );
+    }
+);
+
+$router->post(
+    '/api/v1/admin/payments/{id}/refund',
+    function (
+        Request $request,
+        array $params
+    ): void {
+        $admin =
+            RoleMiddleware::handle(
+                'admin'
+            );
+
+        if ($admin === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new DemoPaymentController();
+
+        $controller->refund(
+            $request,
+            $admin,
+            (string) (
+                $params['id']
+                ?? ''
+            )
         );
     }
 );
