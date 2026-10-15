@@ -3,7 +3,7 @@ import { Check } from "lucide-react";
 import { site } from "@/config/site";
 import { logoutAction } from "@/app/actions/auth";
 
-export function TrustBar({ user = null }: { user?: { firstName: string } | null }) {
+export function TrustBar({ user = null }: { user?: { firstName: string; isAdmin?: boolean } | null }) {
   return (
     <div className="bg-brand-950 text-brand-100">
       <div className="shell flex h-9 items-center justify-between gap-6 text-xs">
@@ -22,6 +22,7 @@ export function TrustBar({ user = null }: { user?: { firstName: string } | null 
           <span className="h-3 w-px bg-brand-700" aria-hidden />
           {user ? (
             <>
+              {user.isAdmin && <Link href="/admin" className="font-semibold text-white hover:underline">Admin</Link>}
               <Link href="/account" className="hover:text-white">Hi, {user.firstName}</Link>
               <form action={logoutAction}>
                 <button type="submit" className="hover:text-white">Log out</button>

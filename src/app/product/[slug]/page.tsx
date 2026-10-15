@@ -3,8 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { MessageSquareText } from "lucide-react";
 import { AddToCart } from "@/components/cart/AddToCart";
-import { categories } from "@/config/site";
-import { getProductDetail, getRelatedProducts } from "@/lib/catalogue";
+import { getProductDetail, getRelatedProducts, getStoreCategories } from "@/lib/catalogue";
 import { exclusiveFromInclusive, formatZar } from "@/lib/vat";
 import { cn } from "@/lib/cn";
 import { ProductCard } from "@/components/product/ProductCard";
@@ -43,7 +42,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
     product.variants.find((v) => v.sku === sku) ?? product.variants.find((v) => v.stock > 0) ?? product.variants[0];
 
   const category = product.categories[0] ?? null;
-  const categoryIcon = categories.find((c) => c.slug === category?.slug)?.icon;
+  const storeCategories = await getStoreCategories().catch(() => []);
+  const categoryIcon = storeCategories.find((c) => c.slug === category?.slug)?.icon;
   const related = await getRelatedProducts(category?.slug ?? null, product.id);
   const onSale = variant.wasCents != null && variant.wasCents > variant.priceCents;
   const inStock = variant.stock > 0;

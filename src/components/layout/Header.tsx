@@ -1,12 +1,23 @@
 import Link from "next/link";
 import { ChevronDown, Menu, ShoppingCart, User } from "lucide-react";
-import { categories, mainNav } from "@/config/site";
+import { mainNav } from "@/config/site";
+import type { StoreCategory } from "@/lib/catalogue-types";
+import { topLevel } from "@/lib/store-categories";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { Logo } from "./Logo";
 import { SearchForm } from "./SearchForm";
 import { TrustBar } from "./TrustBar";
 
-export function Header({ cartCount = 0, user = null }: { cartCount?: number; user?: { firstName: string } | null }) {
+export function Header({
+  cartCount = 0,
+  user = null,
+  categories = [],
+}: {
+  cartCount?: number;
+  user?: { firstName: string; isAdmin?: boolean } | null;
+  categories?: StoreCategory[];
+}) {
+  const menu = topLevel(categories);
   return (
     <header className="sticky top-0 z-40 bg-surface shadow-[0_1px_0_var(--tw-shadow-color)] shadow-line">
       <TrustBar user={user} />
@@ -35,7 +46,7 @@ export function Header({ cartCount = 0, user = null }: { cartCount?: number; use
             </ul>
             <p className="mt-2 border-t border-line px-3 pb-1 pt-3 text-xs text-ink-muted">Categories</p>
             <ul>
-              {categories.map((c) => (
+              {menu.map((c) => (
                 <li key={c.slug}>
                   <Link
                     href={`/shop?category=${c.slug}`}
@@ -53,7 +64,7 @@ export function Header({ cartCount = 0, user = null }: { cartCount?: number; use
         <Logo />
 
         <div className="hidden flex-1 md:block">
-          <SearchForm />
+          <SearchForm categories={categories} />
         </div>
 
         <div className="ml-auto flex items-center gap-1 md:ml-0">
@@ -84,7 +95,7 @@ export function Header({ cartCount = 0, user = null }: { cartCount?: number; use
 
       {/* Mobile search row */}
       <div className="shell pb-3 md:hidden">
-        <SearchForm />
+        <SearchForm categories={categories} />
       </div>
 
       {/* Main navigation bar (tablet and up) */}
@@ -98,8 +109,8 @@ export function Header({ cartCount = 0, user = null }: { cartCount?: number; use
               </span>
               <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
             </summary>
-            <ul className="absolute left-0 top-full z-50 w-60 bg-surface py-1 text-ink shadow-lift lg:w-64">
-              {categories.map((c) => (
+            <ul className="absolute left-0 top-full z-50 max-h-[70vh] w-60 overflow-y-auto bg-surface py-1 text-ink shadow-lift lg:w-64">
+              {menu.map((c) => (
                 <li key={c.slug}>
                   <Link href={`/shop?category=${c.slug}`} className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-brand-50">
                     <CategoryIcon name={c.icon} className="h-5 w-5 text-brand-600" />

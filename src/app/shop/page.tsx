@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { SearchX, SlidersHorizontal } from "lucide-react";
-import { categories } from "@/config/site";
-import { getShopResult } from "@/lib/catalogue";
+import { getShopResult, getStoreCategories } from "@/lib/catalogue";
+import { OTHER_NAME, OTHER_SLUG, type StoreCategory } from "@/lib/catalogue-types";
 import { hasActiveFilters, parseShopParams } from "@/lib/shop-params";
 import { ActiveFilters } from "@/components/shop/ActiveFilters";
 import { FilterPanel } from "@/components/shop/FilterPanel";
@@ -13,14 +13,16 @@ import { Breadcrumbs } from "@/components/ui/Breadcrumbs";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-const categoryName = (slug: string | null) => categories.find((c) => c.slug === slug)?.name ?? null;
+const categoryName = (categories: StoreCategory[], slug: string | null) =>
+  slug === OTHER_SLUG ? OTHER_NAME : (categories.find((c) => c.slug === slug)?.name ?? null);
 
 export async function generateMetadata({ searchParams }: { searchParams: SearchParams }): Promise<Metadata> {
   const p = parseShopParams(await searchParams);
-  const title = p.q ? `Search results for “${p.q}”` : (categoryName(p.category) ?? "Shop");
+  const categories = await getStoreCategories().catch(() => []);
+  const title = p.q ? `Search results for “${p.q}”` : (categoryName(categories, p.category) ?? "Shop");
   return {
     title,
-    description: `Browse ${categoryName(p.category) ?? "laboratory and medical supplies"} from MultiSS. All prices include VAT.`,
+    description: `Browse ${categoryName(categories, p.category) ?? "laboratory and medical supplies"} from MultiSS. All prices include VAT.`,
     // Search results and deep filter combinations shouldn't compete with the category pages.
     robots: p.q || p.brands.length || p.minCents != null || p.maxCents != null || p.inStock || p.page > 1 ? { index: false } : undefined,
   };
@@ -30,8 +32,9 @@ export default async function ShopPage({ searchParams }: { searchParams: SearchP
   const params = parseShopParams(await searchParams);
 
   let result;
+  let categories: StoreCategory[];
   try {
-    result = await getShopResult(params);
+    [result, categories] = await Promise.all([getShopResult(params), getStoreCategories()]);
   } catch (err) {
     console.error("shop: failed to load products", err);
     return (
@@ -46,7 +49,7 @@ export default async function ShopPage({ searchParams }: { searchParams: SearchP
   }
 
   const { items, total, page, pageCount, pageSize, facets } = result;
-  const heading = params.q ? `Results for “${params.q}”` : (categoryName(params.category) ?? "All products");
+  const heading = params.q ? `Results for “${params.q}”` : (categoryName(categories, params.category) ?? "All products");
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
   const filtersOn = hasActiveFilters(params);
@@ -58,7 +61,7 @@ export default async function ShopPage({ searchParams }: { searchParams: SearchP
         items={[
           { label: "Home", href: "/" },
           { label: "Shop", href: params.category || params.q ? "/shop" : undefined },
-          ...(params.category ? [{ label: categoryName(params.category) ?? params.category }] : []),
+          ...(params.category ? [{ label: categoryName(categories, params.category) ?? params.category }] : []),
         ]}
       />
 
@@ -81,16 +84,16 @@ export default async function ShopPage({ searchParams }: { searchParams: SearchP
             {activeCount > 0 && <span className="nums rounded-full bg-brand-700 px-2 py-0.5 text-xs text-white">{activeCount}</span>}
           </summary>
           <div className="border-t border-line p-4">
-            <FilterPanel params={params} facets={facets} idPrefix="m" />
+            <FilterPanel params={params} facets={facets} categories={categories} idPrefix="m" />
           </div>
         </details>
-        <ActiveFilters params={params} />
+        <ActiveFilters params={params} categories={categories} />
       </div>
 
       <div className="mt-5 grid gap-8 lg:grid-cols-[15rem_1fr]">
         <aside className="hidden lg:block" aria-label="Filters">
           <div className="sticky top-40 max-h-[calc(100vh-11rem)] overflow-y-auto pr-1">
-            <FilterPanel params={params} facets={facets} idPrefix="d" />
+            <FilterPanel params={params} facets={facets} categories={categories} idPrefix="d" />
           </div>
         </aside>
 

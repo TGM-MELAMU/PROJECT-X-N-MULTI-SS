@@ -1,17 +1,16 @@
 import Link from "next/link";
 import { X } from "lucide-react";
-import { categories } from "@/config/site";
-import type { ShopParams } from "@/lib/catalogue-types";
+import { OTHER_NAME, OTHER_SLUG, type ShopParams, type StoreCategory } from "@/lib/catalogue-types";
 import { shopHref } from "@/lib/shop-params";
 import { formatZar } from "@/lib/vat";
 
 /** One removable chip per applied filter, so people can see and undo what narrowed their results. */
-export function ActiveFilters({ params }: { params: ShopParams }) {
+export function ActiveFilters({ params, categories }: { params: ShopParams; categories: StoreCategory[] }) {
   const chips: Array<{ key: string; label: string; href: string }> = [];
 
   if (params.q) chips.push({ key: "q", label: `Search: “${params.q}”`, href: shopHref(params, { q: "", page: 1 }) });
   if (params.category) {
-    const name = categories.find((c) => c.slug === params.category)?.name ?? params.category;
+    const name = params.category === OTHER_SLUG ? OTHER_NAME : (categories.find((c) => c.slug === params.category)?.name ?? params.category);
     chips.push({ key: "category", label: name, href: shopHref(params, { category: null, page: 1 }) });
   }
   for (const b of params.brands) {

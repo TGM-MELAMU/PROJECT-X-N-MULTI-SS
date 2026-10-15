@@ -1,18 +1,21 @@
-import { categories } from "@/config/site";
-import { iconFor, sampleDetail, sampleRows } from "@/lib/catalogue-samples";
+import { categories as configuredCategories } from "@/config/site";
+import { sampleDetail, sampleRows } from "@/lib/catalogue-samples";
 import { db } from "@/lib/db";
-import { queryCatalogue } from "@/lib/catalogue-query";
+import { applyNewBadgeGuard, pickShowcase, queryCatalogue } from "@/lib/catalogue-query";
+import { buildStoreCategories, categoryLineage, type DbCategory } from "@/lib/store-categories";
 import { toCents } from "@/lib/vat";
 import {
+  OTHER_SLUG,
   SPECIAL_OFFERS_SLUG,
   type CatalogueRow,
   type ProductDetail,
   type ProductSummary,
   type ShopParams,
   type ShopResult,
+  type StoreCategory,
 } from "@/lib/catalogue-types";
 
-export type { ProductSummary } from "@/lib/catalogue-types";
+export type { ProductSummary, StoreCategory } from "@/lib/catalogue-types";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const NEW_WINDOW_MS = 30 * DAY_MS;
@@ -20,7 +23,21 @@ const NEW_WINDOW_MS = 30 * DAY_MS;
 const COUNTED_ORDER_STATUSES = ["new", "confirmed", "processing", "completed"] as const;
 
 const useMock = () => process.env.USE_MOCK_DATA === "true";
-const categorySlugs = categories.map((c) => c.slug);
+
+/** The sample categories used by the no-database preview. */
+const mockCategories = (): StoreCategory[] =>
+  configuredCategories.map((c) => ({ slug: c.slug, name: c.name, icon: c.icon, parentSlug: null }));
+
+// ───────────────────────── Categories ─────────────────────────
+
+/** Active categories straight from the `categories` table. */
+async function loadCategoryRows(): Promise<DbCategory[]> {
+  const rows = await db.category.findMany({
+    where: { status: "active" },
+    select: { id: true, parentCategoryId: true, name: true, slug: true },
+  });
+  return rows.map((r) => ({ id: r.id, parentId: r.parentCategoryId, name: r.name, slug: r.slug }));
+}
 
 // ───────────────────────── Loading the catalogue ─────────────────────────
 
@@ -31,7 +48,8 @@ const categorySlugs = categories.map((c) => c.slug);
  * to tens of thousands of products; beyond that, move filtering into SQL.
  */
 export async function loadFromDb(): Promise<CatalogueRow[]> {
-  const [products, sold] = await Promise.all([
+  const [categoryRows, products, sold] = await Promise.all([
+    loadCategoryRows(),
     db.product.findMany({
       // Only approved, active products are public (vendor products wait for admin approval).
       where: { status: "active", approvalStatus: "approved" },
@@ -68,6 +86,11 @@ export async function loadFromDb(): Promise<CatalogueRow[]> {
   ]);
 
   const soldByVariant = new Map(sold.map((s) => [s.variantId, s._sum.quantity ?? 0]));
+  const storeCategories = buildStoreCategories(categoryRows, configuredCategories);
+  const iconBySlug = new Map(storeCategories.map((c) => [c.slug, c.icon]));
+  // slug -> itself + its ancestors. Only ACTIVE categories are in here, so a product tagged only
+  // with a switched-off category counts as uncategorised.
+  const lineage = categoryLineage(categoryRows);
   const now = Date.now();
   const rows: CatalogueRow[] = [];
 
@@ -75,8 +98,10 @@ export async function loadFromDb(): Promise<CatalogueRow[]> {
     if (p.variants.length === 0) continue; // nothing to sell
     // Show the cheapest variant that is in stock; if none is, the cheapest overall.
     const v = p.variants.find((x) => (x.inventory?.quantityInStock ?? 0) > 0) ?? p.variants[0];
-    const slugs = p.categories.map((c) => c.category.slug);
-    const primary = slugs.find((s) => s !== SPECIAL_OFFERS_SLUG) ?? slugs[0] ?? null;
+    const direct = p.categories.map((c) => c.category.slug).filter((slug) => lineage.has(slug));
+    // A product in a sub-category also appears under its parent categories.
+    const slugs = [...new Set(direct.flatMap((slug) => lineage.get(slug) ?? [slug]))];
+    const primary = direct.find((s) => s !== SPECIAL_OFFERS_SLUG) ?? direct[0] ?? null;
     const createdAtMs = p.createdAt?.getTime() ?? 0;
 
     rows.push({
@@ -86,7 +111,7 @@ export async function loadFromDb(): Promise<CatalogueRow[]> {
       brand: p.brand,
       imageUrl: p.images[0]?.imageUrl ?? null,
       categorySlug: primary,
-      categoryIcon: iconFor(primary),
+      categoryIcon: primary ? iconBySlug.get(primary) : undefined,
       variantId: v.id,
       priceCents: toCents(v.sellingPrice),
       wasCents: v.compareAtPrice ? toCents(v.compareAtPrice) : null,
@@ -103,7 +128,7 @@ export async function loadFromDb(): Promise<CatalogueRow[]> {
       isFeatured: p.isFeatured,
     });
   }
-  return rows;
+  return applyNewBadgeGuard(rows);
 }
 
 // ── In-process cache ──
@@ -119,6 +144,39 @@ const cache: CacheState = (g.__catalogueCache ??= { loadedAt: 0 });
 /** Call after catalogue edits (admin dashboard, Phase 6) so changes show immediately. */
 export function invalidateCatalogue(): void {
   cache.loadedAt = 0;
+  categoryCache.loadedAt = 0;
+}
+
+// The category list is tiny and is needed on EVERY page (the header menu), so it has its own cache
+// instead of making every page wait for the 6,000-product catalogue.
+type CategoryCacheState = { list?: StoreCategory[]; loadedAt: number; inflight?: Promise<StoreCategory[]> };
+const gc = globalThis as unknown as { __categoryCache?: CategoryCacheState };
+const categoryCache: CategoryCacheState = (gc.__categoryCache ??= { loadedAt: 0 });
+
+async function loadCategoriesCached(): Promise<StoreCategory[]> {
+  if (categoryCache.list && Date.now() - categoryCache.loadedAt < CACHE_TTL_MS) return categoryCache.list;
+  categoryCache.inflight ??= loadCategoryRows()
+    .then((rows) => {
+      categoryCache.list = buildStoreCategories(rows, configuredCategories);
+      categoryCache.loadedAt = Date.now();
+      return categoryCache.list;
+    })
+    .catch((err) => {
+      if (categoryCache.list) {
+        console.error("category reload failed, serving the previous list", err);
+        return categoryCache.list;
+      }
+      throw err;
+    })
+    .finally(() => {
+      categoryCache.inflight = undefined;
+    });
+  return categoryCache.inflight;
+}
+
+/** Categories for menus and filters: top-level and sub-categories, "Special Offers" last. */
+export async function getStoreCategories(): Promise<StoreCategory[]> {
+  return useMock() ? mockCategories() : loadCategoriesCached();
 }
 
 async function loadCached(): Promise<CatalogueRow[]> {
@@ -152,14 +210,19 @@ export async function getCatalogue(): Promise<CatalogueRow[]> {
 
 export async function getFeaturedProducts(limit = 8): Promise<ProductSummary[]> {
   const rows = await getCatalogue();
-  return rows
+  const featured = rows
     .filter((r) => r.isFeatured)
     .sort((a, b) => b.createdAtMs - a.createdAtMs)
     .slice(0, limit);
+  // Nothing hand-picked yet (the imported catalogue has no featured flags): show a sensible spread
+  // rather than an empty home page. Marking products as featured in the admin replaces this.
+  return featured.length > 0 ? featured : pickShowcase(rows, limit);
 }
 
 export async function getShopResult(params: ShopParams): Promise<ShopResult> {
-  return queryCatalogue(await getCatalogue(), params, categorySlugs);
+  const [rows, categories] = await Promise.all([getCatalogue(), getStoreCategories()]);
+  // "Other products" is a virtual category for anything not yet categorised.
+  return queryCatalogue(rows, params, [...categories.map((c) => c.slug), OTHER_SLUG]);
 }
 
 export async function getRelatedProducts(categorySlug: string | null, excludeId: number, limit = 4) {
@@ -183,7 +246,7 @@ export async function getProductDetail(slug: string): Promise<ProductDetail | nu
     include: {
       images: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }] },
       specifications: { orderBy: { sortOrder: "asc" } },
-      categories: { include: { category: { select: { name: true, slug: true } } } },
+      categories: { include: { category: { select: { name: true, slug: true, status: true } } } },
       variants: {
         where: { status: "active" },
         orderBy: { sellingPrice: "asc" },
@@ -201,7 +264,7 @@ export async function getProductDetail(slug: string): Promise<ProductDetail | nu
     description: p.description,
     categories: p.categories
       .map((c) => c.category)
-      .filter((c) => c.slug !== SPECIAL_OFFERS_SLUG)
+      .filter((c) => c.status === "active" && c.slug !== SPECIAL_OFFERS_SLUG)
       .map((c) => ({ name: c.name, slug: c.slug })),
     images: p.images.map((i) => ({ url: i.imageUrl, alt: i.altText ?? p.name })),
     specs: p.specifications.map((s) => ({ name: s.name, value: s.value })),

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, BadgeCheck, Headset, ShieldCheck, Sparkles, Tag, Truck, Trophy } from "lucide-react";
-import { categories } from "@/config/site";
-import { getFeaturedProducts, type ProductSummary } from "@/lib/catalogue";
+import { getFeaturedProducts, getStoreCategories, type ProductSummary, type StoreCategory } from "@/lib/catalogue";
+import { topLevel } from "@/lib/store-categories";
 import { CategoryRail } from "@/components/home/CategoryRail";
 import { Hero } from "@/components/home/Hero";
 import { ProductCard } from "@/components/product/ProductCard";
@@ -39,19 +39,23 @@ function SectionHeading({ id, title, href, linkText }: { id: string; title: stri
 
 export default async function HomePage() {
   let featured: ProductSummary[] = [];
+  let categories: StoreCategory[] = [];
   let featuredFailed = false;
-  try {
-    featured = await getFeaturedProducts(8);
-  } catch (err) {
-    console.error("home: failed to load featured products", err);
+  // Independent, so a problem loading one doesn't blank the other.
+  const [f, c] = await Promise.allSettled([getFeaturedProducts(8), getStoreCategories()]);
+  if (f.status === "fulfilled") featured = f.value;
+  else {
+    console.error("home: failed to load featured products", f.reason);
     featuredFailed = true;
   }
+  if (c.status === "fulfilled") categories = c.value;
+  else console.error("home: failed to load categories", c.reason);
 
   return (
     <div className="shell space-y-12 pt-5 md:pt-6">
       {/* Hero row: category rail (desktop) + hero + promos */}
       <div className="grid gap-5 lg:grid-cols-[16rem_1fr]">
-        <CategoryRail className="hidden lg:block lg:self-start" />
+        <CategoryRail categories={categories} className="hidden lg:block lg:self-start" />
         <div className="space-y-5">
           <Hero />
           <ul className="grid gap-3 sm:grid-cols-3">
@@ -81,9 +85,9 @@ export default async function HomePage() {
 
       {/* Shop by category */}
       <section aria-labelledby="cat-title">
-        <SectionHeading id="cat-title" title="Shop by category" href="/shop" linkText="View all categories" />
-        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-          {categories.map((c) => {
+        <SectionHeading id="cat-title" title="Shop by category" href="/categories" linkText="View all categories" />
+        <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+          {topLevel(categories).map((c) => {
             const offer = c.slug === "special-offers";
             return (
               <li key={c.slug}>
