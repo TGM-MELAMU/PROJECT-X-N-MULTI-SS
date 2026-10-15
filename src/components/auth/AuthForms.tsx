@@ -54,6 +54,14 @@ export function RegisterForm({ next }: { next?: string }) {
         </label>
         {s.fields?.acceptTerms && <p className="mt-1 text-sm text-sale-dark">{s.fields.acceptTerms}</p>}
       </div>
+      <label className="flex items-start gap-2.5 text-sm">
+        <input type="checkbox" name="marketing" defaultChecked={v?.marketing === "on"} className="mt-0.5 h-4 w-4 accent-brand-700" />
+        <span>Email me news and offers (optional). You can unsubscribe at any time.</span>
+      </label>
+      <p className="text-xs text-ink-muted">
+        We use your details to create your account, process and deliver your orders and keep your account secure. See our{" "}
+        <Link href="/privacy" target="_blank" className="underline underline-offset-2">privacy policy</Link> for how we protect them and your rights.
+      </p>
       <Button type="submit" size="lg" className="w-full" disabled={pending}>{pending ? "Creating account…" : "Create account"}</Button>
       <p className="text-center text-sm text-ink-soft">
         Already registered? <Link href={`/login${qs(next)}`} className="text-brand-700 underline underline-offset-2">Log in</Link>

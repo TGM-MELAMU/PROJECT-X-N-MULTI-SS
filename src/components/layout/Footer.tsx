@@ -18,6 +18,7 @@ const customerService = [
   { label: "Returns and refunds", href: "/returns" },
   { label: "Terms and conditions", href: "/terms" },
   { label: "Privacy policy", href: "/privacy" },
+  { label: "Cookie notice", href: "/privacy#cookies" },
 ];
 
 function Column({ title, children }: { title: string; children: React.ReactNode }) {

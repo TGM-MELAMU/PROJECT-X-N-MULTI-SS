@@ -13,6 +13,7 @@ import {
 } from "@/lib/admin/validation";
 import { ORDER_STATUS } from "@/lib/account/order-status";
 import { invalidateCatalogue } from "@/lib/catalogue";
+import { stockAfterRestock } from "@/lib/stock";
 import { centsToDecimalString } from "@/lib/vat";
 
 // ───────────── helpers ─────────────
@@ -96,7 +97,7 @@ export async function updateOrderStatusAction(fd: FormData): Promise<void> {
         for (const it of order.items) {
           const inv = await tx.inventory.findUnique({ where: { variantId: it.variantId } });
           const prev = inv?.quantityInStock ?? 0;
-          const next = prev + it.quantity;
+          const { next } = stockAfterRestock(prev, it.quantity);
           if (inv) await tx.inventory.update({ where: { variantId: it.variantId }, data: { quantityInStock: next } });
           else await tx.inventory.create({ data: { variantId: it.variantId, quantityInStock: next } });
           await tx.inventoryMovement.create({

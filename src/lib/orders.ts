@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { centsToDecimalString, toCents } from "@/lib/vat";
 import { computeTotals } from "@/lib/totals";
 import { invalidateCatalogue } from "@/lib/catalogue";
+import { lineProblem, stockAfterSale } from "@/lib/stock";
 
 export type AddressInput = {
   recipientName: string;
@@ -71,8 +72,8 @@ export async function createOrderFromCart(userId: number, address: AddressInput,
           const p = v.product;
           const stock = (await tx.inventory.findUnique({ where: { variantId: v.id }, select: { quantityInStock: true } }))?.quantityInStock ?? 0;
           const live = v.status === "active" && p.status === "active" && p.approvalStatus === "approved";
-          if (!live) problems.push(`${p.name} is no longer available`);
-          else if (stock < it.quantity) problems.push(stock === 0 ? `${p.name} is out of stock` : `Only ${stock} of ${p.name} left`);
+          const problem = lineProblem({ name: p.name, live, stock, quantity: it.quantity });
+          if (problem) problems.push(problem);
           const rule =
             (p.commissionRule?.status === "active" ? p.commissionRule : null) ??
             p.categories.map((c) => c.category.commissionRule).find((r) => r?.status === "active") ??
@@ -221,7 +222,7 @@ export async function markOrderPaid(orderNumber: string, info: PaidInfo): Promis
     for (const it of items) {
       const inv = await tx.inventory.findUnique({ where: { variantId: it.variantId } });
       const prev = inv?.quantityInStock ?? 0;
-      const next = Math.max(0, prev - it.quantity);
+      const { next } = stockAfterSale(prev, it.quantity);
       if (inv) await tx.inventory.update({ where: { variantId: it.variantId }, data: { quantityInStock: next } });
       await tx.inventoryMovement.create({
         data: {

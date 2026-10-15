@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
+import { ProductImage } from "@/components/ui/ProductImage";
 import type { CategoryIconName } from "@/config/site";
 import { cn } from "@/lib/cn";
 
@@ -26,9 +27,8 @@ export function ProductGallery({
   const current = images[Math.min(active, images.length - 1)];
   return (
     <div className="space-y-3">
-      <div className="flex aspect-[4/3] items-center justify-center overflow-hidden rounded-card bg-surface-muted md:aspect-square">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={current.url} alt={current.alt} className="h-full w-full object-contain p-6" />
+      <div className="relative aspect-[4/3] overflow-hidden rounded-card bg-surface-muted md:aspect-square">
+        <ProductImage src={current.url} alt={current.alt} sizes="(min-width: 768px) 50vw, 100vw" priority className="h-full w-full object-contain p-6" />
       </div>
       {images.length > 1 && (
         <ul className="flex gap-2 overflow-x-auto" aria-label="Product photos">
@@ -40,12 +40,11 @@ export function ProductGallery({
                 aria-label={`Show photo ${i + 1} of ${images.length}`}
                 aria-current={i === active ? "true" : undefined}
                 className={cn(
-                  "h-16 w-16 overflow-hidden rounded-control bg-surface-muted ring-1 ring-inset",
+                  "relative h-16 w-16 overflow-hidden rounded-control bg-surface-muted ring-1 ring-inset",
                   i === active ? "ring-2 ring-brand-600" : "ring-line hover:ring-line-strong",
                 )}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={img.url} alt="" className="h-full w-full object-contain p-1" />
+                <ProductImage src={img.url} alt="" sizes="64px" className="h-full w-full object-contain p-1" />
               </button>
             </li>
           ))}

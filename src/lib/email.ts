@@ -1,4 +1,5 @@
 import { site } from "@/config/site";
+import { siteUrl } from "@/lib/site-url";
 
 /**
  * Sends a transactional email through Resend's HTTP API when EMAIL_API_KEY is set.
@@ -25,9 +26,6 @@ export async function sendEmail(msg: { to: string; subject: string; text: string
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-export function siteUrl(): string {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
-}
 
 export async function sendPasswordResetEmail(to: string, firstName: string, rawToken: string): Promise<void> {
   const link = `${siteUrl()}/reset-password?token=${encodeURIComponent(rawToken)}`;

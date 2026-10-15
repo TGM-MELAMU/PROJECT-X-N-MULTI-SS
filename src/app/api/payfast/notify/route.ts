@@ -6,6 +6,7 @@ import {
 } from "@/lib/payfast";
 import { markOrderPaid, markOrderPaymentFailed } from "@/lib/orders";
 import { toCents } from "@/lib/vat";
+import { clientIp, hit } from "@/lib/auth/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,11 @@ export const dynamic = "force-dynamic";
  * Anything wrong gets a 400 and changes nothing.
  */
 export async function POST(req: Request) {
+  // PayFast sends a handful of notices per order; this only stops a flood of forged requests from keeping the server busy.
+  if (!hit(`pf-notify:${clientIp(req.headers)}`, 300, 10 * 60_000).ok) {
+    return new NextResponse("slow down", { status: 429, headers: { "Retry-After": "60" } });
+  }
+
   const cfg = payfastConfig();
   const raw = await req.text();
   const pairs = [...new URLSearchParams(raw).entries()] as Array<[string, string]>;

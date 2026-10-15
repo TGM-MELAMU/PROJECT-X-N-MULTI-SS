@@ -14,6 +14,11 @@ export const site = {
     email: "info@multiss.co.za", // TODO
     hours: "Mon–Fri 08:00–17:00", // TODO
   },
+  /** POPIA: the person who handles privacy requests. TODO: MultiSS to confirm who this is (the owner is Information Officer by default). */
+  informationOfficer: {
+    name: "The Information Officer", // TODO real name
+    email: "privacy@multiss.co.za", // TODO
+  },
   trust: ["Quality products", "Fast delivery", "Secure payments", "Excellent support"],
   /** While true, legal and policy pages show a "draft" notice. Set to false once MultiSS approves the wording. */
   legalDraft: true,

@@ -2,6 +2,7 @@ import "server-only";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { toCents } from "@/lib/vat";
+import { isBuyable } from "@/lib/stock";
 import { computeTotals, MAX_LINE_QUANTITY, type Totals } from "@/lib/totals";
 
 export type CartLine = {
@@ -76,7 +77,7 @@ export async function getCartView(userId: number): Promise<CartView> {
   });
 
   // Totals only count lines that can actually be bought.
-  const buyable = lines.filter((l) => l.available && l.stock > 0 && l.quantity <= l.stock);
+  const buyable = lines.filter(isBuyable);
   const problems = lines.length - buyable.length;
   return { cartId: cart.id, lines, totals: computeTotals(lines.map((l) => ({ unitCents: l.unitCents, quantity: l.quantity }))), problems };
 }

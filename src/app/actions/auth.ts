@@ -70,6 +70,7 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
     email: text(formData, "email"),
     phone: text(formData, "phone"),
     acceptTerms: text(formData, "acceptTerms"),
+    marketing: text(formData, "marketing"),
   };
 
   const parsed = registerSchema.safeParse({ ...values, password: text(formData, "password") });
@@ -102,6 +103,13 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
     }
     console.error("register failed", err);
     return { error: "We couldn't create your account just now. Please try again.", values };
+  }
+
+  // Marketing email is a separate, optional consent (POPIA): only subscribed when the box was ticked.
+  if (values.marketing === "on") {
+    await db.newsletterSubscriber
+      .upsert({ where: { email: d.email }, update: { unsubscribedAt: null }, create: { email: d.email } })
+      .catch((e) => console.error("marketing opt-in failed", e));
   }
 
   try {

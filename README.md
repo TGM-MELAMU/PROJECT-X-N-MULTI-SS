@@ -134,3 +134,8 @@ See `docs/PHASE0.md` for decisions, open questions and the re-scoped plan.
 - Every admin page **and** every admin server action checks the admin role against the database (`requireAdmin()`), not just the cookie.
 - Admin edits call `invalidateCatalogue()`, so the shop updates at once (single server process).
 - **Not built:** deleting products/categories, photo upload, refunds, customer emails on status change, user management, vendor approval screens, audit log beyond order notes.
+
+## Phase 7 notes (hardening and QA)
+
+See `docs/PHASE7.md`: security headers, rate limits, accessibility audit (`npm run a11y`), SEO, image handling, VAT and stock tests,
+the browse-to-pay end-to-end test (`npm run e2e:journey`) and POPIA basics, plus the items MultiSS must confirm before launch.

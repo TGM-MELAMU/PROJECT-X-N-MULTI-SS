@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/Badge";
 import { buttonClass } from "@/components/ui/Button";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { Price } from "@/components/ui/Price";
+import { ProductImage } from "@/components/ui/ProductImage";
 import { AddToCart } from "@/components/cart/AddToCart";
 import type { ProductSummary } from "@/lib/catalogue";
 
@@ -14,11 +15,10 @@ export function ProductCard({ product }: { product: ProductSummary }) {
     <article className="group flex flex-col overflow-hidden rounded-card bg-surface shadow-card transition-shadow hover:shadow-lift">
       <Link href={href} className="relative block aspect-[4/3] bg-surface-muted" tabIndex={-1} aria-hidden>
         {product.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <ProductImage
             src={product.imageUrl}
             alt=""
-            loading="lazy"
+            sizes="(min-width: 1024px) 22vw, (min-width: 640px) 33vw, 50vw"
             className="h-full w-full object-contain p-4 transition-transform duration-300 group-hover:scale-[1.03]"
           />
         ) : (
