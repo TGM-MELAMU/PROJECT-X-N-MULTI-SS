@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+
 use MultiSS\Controllers\PaymentController;
 use MultiSS\Controllers\CartController;
 use MultiSS\Controllers\AdminProductController;
@@ -126,6 +127,7 @@ $router->get(
         ], 200);
     }
 );
+
 /*
 |--------------------------------------------------------------------------
 | Cart
@@ -135,13 +137,16 @@ $router->get(
 $router->get(
     '/api/v1/cart',
     function (Request $request): void {
-        $user = AuthMiddleware::handle();
+        $user = RoleMiddleware::handle(
+            'customer'
+        );
 
         if ($user === null) {
             return;
         }
 
-        $controller = new CartController();
+        $controller =
+            new CartController();
 
         $controller->index(
             $request,
@@ -150,10 +155,15 @@ $router->get(
     }
 );
 
-$router->post(
-    '/api/v1/cart/items',
+/*
+ * Clear the authenticated customer's entire cart.
+ */
+$router->delete(
+    '/api/v1/cart',
     function (Request $request): void {
-        $user = AuthMiddleware::handle();
+        $user = RoleMiddleware::handle(
+            'customer'
+        );
 
         if ($user === null) {
             return;
@@ -163,7 +173,32 @@ $router->post(
             $request
         );
 
-        $controller = new CartController();
+        $controller =
+            new CartController();
+
+        $controller->clear(
+            $user
+        );
+    }
+);
+
+$router->post(
+    '/api/v1/cart/items',
+    function (Request $request): void {
+        $user = RoleMiddleware::handle(
+            'customer'
+        );
+
+        if ($user === null) {
+            return;
+        }
+
+        CsrfMiddleware::validate(
+            $request
+        );
+
+        $controller =
+            new CartController();
 
         $controller->store(
             $request,
@@ -178,7 +213,9 @@ $router->patch(
         Request $request,
         array $params
     ): void {
-        $user = AuthMiddleware::handle();
+        $user = RoleMiddleware::handle(
+            'customer'
+        );
 
         if ($user === null) {
             return;
@@ -196,7 +233,8 @@ $router->patch(
                 ? (int) $params['id']
                 : 0;
 
-        $controller = new CartController();
+        $controller =
+            new CartController();
 
         $controller->update(
             $request,
@@ -212,7 +250,9 @@ $router->delete(
         Request $request,
         array $params
     ): void {
-        $user = AuthMiddleware::handle();
+        $user = RoleMiddleware::handle(
+            'customer'
+        );
 
         if ($user === null) {
             return;
@@ -230,7 +270,8 @@ $router->delete(
                 ? (int) $params['id']
                 : 0;
 
-        $controller = new CartController();
+        $controller =
+            new CartController();
 
         $controller->destroy(
             $user,
@@ -238,6 +279,7 @@ $router->delete(
         );
     }
 );
+
 /*
 |--------------------------------------------------------------------------
 | Addresses
@@ -285,6 +327,7 @@ $router->post(
         );
     }
 );
+
 /*
 |--------------------------------------------------------------------------
 | Checkout
@@ -310,6 +353,7 @@ $router->get(
         );
     }
 );
+
 $router->post(
     '/api/v1/checkout/orders',
     function (Request $request): void {
@@ -603,6 +647,13 @@ $router->post(
         );
     }
 );
+
+/*
+|--------------------------------------------------------------------------
+| Orders
+|--------------------------------------------------------------------------
+*/
+
 $router->get(
     '/api/v1/orders/{orderNumber}',
     function (
@@ -610,9 +661,7 @@ $router->get(
         array $params
     ): void {
         $user =
-            AuthMiddleware::handle(
-                $request
-            );
+            AuthMiddleware::handle();
 
         if ($user === null) {
             return;
@@ -640,6 +689,7 @@ $router->get(
         );
     }
 );
+
 /*
 |--------------------------------------------------------------------------
 | Payments - PayFast
@@ -693,6 +743,7 @@ $router->get(
         );
     }
 );
+
 $router->post(
     '/api/v1/payments/payfast/notify',
     function (Request $request): void {
@@ -705,6 +756,7 @@ $router->post(
          * Security is handled by the PayFast
          * signature/source/amount/server checks.
          */
+
         $controller =
             new PaymentController();
 

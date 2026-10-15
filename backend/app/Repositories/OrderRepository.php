@@ -29,6 +29,16 @@ final class OrderRepository
         string $contactNumber,
         string $orderNumber
     ): array {
+        $cartRepository =
+            new CartRepository(
+                $this->pdo
+            );
+
+        $cartRepository
+            ->expireActiveCartByUserId(
+                $userId
+            );
+
         $this->pdo->beginTransaction();
 
         try {
@@ -80,6 +90,11 @@ final class OrderRepository
                 WHERE
                     user_id = :user_id
                     AND cart_status = \'active\'
+                    AND created_at >
+                        DATE_SUB(
+                            CURRENT_TIMESTAMP,
+                            INTERVAL 7 DAY
+                        )
                 ORDER BY cart_id DESC
                 LIMIT 1
                 FOR UPDATE

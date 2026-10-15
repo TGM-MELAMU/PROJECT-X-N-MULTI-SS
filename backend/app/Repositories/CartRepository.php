@@ -21,6 +21,10 @@ final class CartRepository
     public function findActiveCartByUserId(
         int $userId
     ): ?array {
+        $this->expireActiveCartByUserId(
+            $userId
+        );
+
         $statement = $this->pdo->prepare(
             '
             SELECT
@@ -47,6 +51,52 @@ final class CartRepository
         return $cart === false
             ? null
             : $cart;
+    }
+
+    public function expireActiveCartByUserId(
+        int $userId
+    ): bool {
+        $statement = $this->pdo->prepare(
+            '
+            UPDATE carts
+            SET cart_status = \'abandoned\'
+            WHERE
+                user_id = :user_id
+                AND cart_status = \'active\'
+                AND created_at <=
+                    DATE_SUB(
+                        CURRENT_TIMESTAMP,
+                        INTERVAL 7 DAY
+                    )
+            '
+        );
+
+        $statement->execute([
+            'user_id' => $userId,
+        ]);
+
+        return $statement->rowCount() > 0;
+    }
+
+    public function expireAllActiveCarts(): int
+    {
+        $statement = $this->pdo->prepare(
+            '
+            UPDATE carts
+            SET cart_status = \'abandoned\'
+            WHERE
+                cart_status = \'active\'
+                AND created_at <=
+                    DATE_SUB(
+                        CURRENT_TIMESTAMP,
+                        INTERVAL 7 DAY
+                    )
+            '
+        );
+
+        $statement->execute();
+
+        return $statement->rowCount();
     }
 
     public function getOrCreateActiveCartId(
@@ -77,6 +127,15 @@ final class CartRepository
                     'User not found.'
                 );
             }
+
+            /*
+             * Expire any existing cart that has reached
+             * the fixed seven-day lifetime before looking
+             * for a usable active cart.
+             */
+            $this->expireActiveCartByUserId(
+                $userId
+            );
 
             $cartStatement = $this->pdo->prepare(
                 '
@@ -260,6 +319,14 @@ final class CartRepository
         int $userId,
         int $cartItemId
     ): ?array {
+        /*
+         * Prevent items belonging to an expired cart from
+         * being updated or removed before expiration runs.
+         */
+        $this->expireActiveCartByUserId(
+            $userId
+        );
+
         $statement = $this->pdo->prepare(
             '
             SELECT
@@ -326,6 +393,21 @@ final class CartRepository
 
         $statement->execute([
             'cart_item_id' => $cartItemId,
+        ]);
+    }
+
+    public function deleteAllCartItems(
+        int $cartId
+    ): void {
+        $statement = $this->pdo->prepare(
+            '
+            DELETE FROM cart_items
+            WHERE cart_id = :cart_id
+            '
+        );
+
+        $statement->execute([
+            'cart_id' => $cartId,
         ]);
     }
 
