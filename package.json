@@ -43,6 +43,9 @@
   },
   "overrides": {
     "mariadb": "3.5.4",
-    "deepmerge-ts": "8.0.2"
+    "deepmerge-ts": "8.0.2",
+    "next": {
+      "postcss": "8.5.30"
+    }
   }
 }
