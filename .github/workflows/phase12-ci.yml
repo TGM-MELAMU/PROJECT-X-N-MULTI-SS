@@ -1,0 +1,92 @@
+name: MultiSS CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+      - phase-12-hardening
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend and dependency security
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DATABASE_URL: mysql://multiss_ci:ci_only@127.0.0.1:3306/multiss_ci
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Validate Prisma schema
+        run: npx --no-install prisma validate
+
+      - name: Generate Prisma Client
+        run: npm run db:generate
+
+      - name: Run frontend unit tests
+        run: npm test
+
+      - name: Run TypeScript validation
+        run: npm run typecheck
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+  php:
+    name: PHP syntax and regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: mbstring, pdo_mysql, mysqli, openssl, curl
+          tools: composer:v2
+          coverage: none
+
+      - name: Install PHP dependencies if configured
+        shell: bash
+        run: |
+          if [ -f backend/composer.json ]; then
+            composer install --working-dir=backend --no-interaction --prefer-dist --no-progress
+          elif [ -f composer.json ]; then
+            composer install --no-interaction --prefer-dist --no-progress
+          else
+            echo "No Composer manifest found; using repository PHP tests."
+          fi
+
+      - name: Check PHP syntax
+        shell: bash
+        run: |
+          find backend/app backend/config backend/routes scripts tests \
+            -type f -name '*.php' -print0 |
+            xargs -0 -n1 php -l > /tmp/multiss-php-lint.txt
+          tail -n 5 /tmp/multiss-php-lint.txt
+
+      - name: Phase 11 regression tests
+        run: php tests/phase11_unit.php
+
+      - name: Phase 9 and 10 regression tests
+        run: php tests/phase9_10_unit.php
