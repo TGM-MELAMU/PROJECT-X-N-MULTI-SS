@@ -7,7 +7,7 @@ namespace MultiSS\Services;
 use DomainException;
 use InvalidArgumentException;
 use MultiSS\Contracts\DistanceProviderInterface;
-use MultiSS\Providers\DemoDistanceProvider;
+use MultiSS\Integrations\ProviderFactory;
 use MultiSS\Repositories\DeliveryRepository;
 use OutOfBoundsException;
 use RuntimeException;
@@ -40,33 +40,7 @@ final class DeliveryService
             return;
         }
 
-        $provider =
-            strtolower(
-                trim(
-                    (string) (
-                        $config[
-                            'distance_provider'
-                        ]
-                        ?? ''
-                    )
-                )
-            );
-
-        if ($provider !== 'demo') {
-            throw new RuntimeException(
-                'A real distance provider has not been configured.'
-            );
-        }
-
-        $this->distanceProvider =
-            new DemoDistanceProvider(
-                (float) (
-                    $config[
-                        'demo_distance_km'
-                    ]
-                    ?? 0
-                )
-            );
+        $this->distanceProvider = ProviderFactory::distance($config);
     }
 
     public function options(): array
