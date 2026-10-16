@@ -35,9 +35,9 @@ export function ContentPage({
   );
 }
 
-export function Section({ title, children }: { title: string; children: React.ReactNode }) {
+export function Section({ title, id, children }: { title: string; id?: string; children: React.ReactNode }) {
   return (
-    <section className="mt-8 first:mt-0">
+    <section id={id} className="mt-8 scroll-mt-24 first:mt-0">
       <h2 className="text-xl">{title}</h2>
       <div className="mt-2 max-w-prose space-y-3 text-ink-soft">{children}</div>
     </section>

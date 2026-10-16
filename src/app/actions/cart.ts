@@ -9,6 +9,7 @@ import { getOrCreateCart, findActiveCart } from "@/lib/cart";
 import { MAX_LINE_QUANTITY } from "@/lib/totals";
 import { safeNext } from "@/lib/auth/redirect";
 import { hit } from "@/lib/auth/rate-limit";
+import { addedQuantity, updatedQuantity } from "@/lib/stock";
 
 export type CartState = { ok?: boolean; message?: string; error?: string; count?: number };
 
@@ -16,6 +17,13 @@ const addSchema = z.object({
   variantId: z.coerce.number().int().positive(),
   quantity: z.coerce.number().int().min(1).max(MAX_LINE_QUANTITY).default(1),
   back: z.string().optional(),
+});
+
+// Quantity comes from a text box, so it may be blank, negative, fractional or huge: anything not a whole number is ignored,
+// and a number above the maximum is brought down to it (0 or less removes the line).
+const updateSchema = z.object({
+  itemId: z.coerce.number().int().positive(),
+  quantity: z.coerce.number().finite().transform((n) => Math.min(Math.floor(n), MAX_LINE_QUANTITY)),
 });
 
 function refresh() {
@@ -51,14 +59,12 @@ export async function addToCartAction(_prev: CartState, formData: FormData): Pro
 
   const cart = await getOrCreateCart(user.id);
   const existing = await db.cartItem.findUnique({ where: { cartId_variantId: { cartId: cart.id, variantId } } });
-  const wanted = (existing?.quantity ?? 0) + quantity;
-  const next = Math.min(wanted, stock, MAX_LINE_QUANTITY);
+  const { next, capped } = addedQuantity({ existing: existing?.quantity ?? 0, adding: quantity, stock, max: MAX_LINE_QUANTITY });
 
   if (existing) await db.cartItem.update({ where: { id: existing.id }, data: { quantity: next } });
   else await db.cartItem.create({ data: { cartId: cart.id, variantId, quantity: next } });
 
   refresh();
-  const capped = next < wanted;
   return {
     ok: true,
     message: capped ? `Added. Only ${stock} in stock, so your cart has ${next}.` : "Added to your cart.",
@@ -77,18 +83,17 @@ async function ownItem(userId: number, itemId: number) {
 export async function updateCartItemAction(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) redirect("/login?next=%2Fcart");
-  const itemId = Number(formData.get("itemId"));
-  const qty = Math.floor(Number(formData.get("quantity")));
-  if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isFinite(qty)) return;
+  const parsed = updateSchema.safeParse({ itemId: formData.get("itemId"), quantity: formData.get("quantity") });
+  if (!parsed.success) return;
+  if (!hit(`cart:${user.id}`, 120, 10 * 60_000).ok) return;
+  const { itemId, quantity: qty } = parsed.data;
 
   const item = await ownItem(user.id, itemId);
   if (!item) return;
   if (qty <= 0) await db.cartItem.delete({ where: { id: item.id } });
   else {
     const stock = item.variant.inventory?.quantityInStock ?? 0;
-    // Allow the saved number to stay above stock only when lowering it; otherwise cap at stock.
-    const capped = Math.min(qty, MAX_LINE_QUANTITY, Math.max(stock, 1));
-    await db.cartItem.update({ where: { id: item.id }, data: { quantity: capped } });
+    await db.cartItem.update({ where: { id: item.id }, data: { quantity: updatedQuantity(qty, stock, MAX_LINE_QUANTITY) } });
   }
   refresh();
 }

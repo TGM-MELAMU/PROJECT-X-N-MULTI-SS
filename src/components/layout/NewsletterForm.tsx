@@ -26,7 +26,7 @@ export function NewsletterForm() {
         <button
           type="submit"
           disabled={pending}
-          className="bg-brand-500 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-400 disabled:opacity-60"
+          className="bg-brand-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-60"
         >
           {pending ? "Subscribing" : "Subscribe"}
         </button>
@@ -37,6 +37,10 @@ export function NewsletterForm() {
         className={`mt-2 min-h-[1.25rem] text-xs ${state.status === "error" ? "text-red-300" : "text-brand-200"}`}
       >
         {state.message}
+      </p>
+      <p className="text-xs text-brand-200">
+        By subscribing you agree to receive marketing email from us. Unsubscribe at any time. See our{" "}
+        <a href="/privacy" className="underline underline-offset-2 hover:text-white">privacy policy</a>.
       </p>
     </form>
   );

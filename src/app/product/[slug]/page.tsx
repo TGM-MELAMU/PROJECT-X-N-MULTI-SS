@@ -27,6 +27,12 @@ export async function generateMetadata({ params }: Pick<Props, "params">): Promi
     title: product.name,
     description: `${product.description ?? product.name} From ${formatZar(lowest)} incl. VAT.`.slice(0, 300),
     alternates: { canonical: `/product/${product.slug}` },
+    openGraph: {
+      type: "website",
+      title: product.name,
+      url: `/product/${product.slug}`,
+      ...(product.images[0] ? { images: [{ url: product.images[0].url, alt: product.images[0].alt }] } : {}),
+    },
   };
 }
 

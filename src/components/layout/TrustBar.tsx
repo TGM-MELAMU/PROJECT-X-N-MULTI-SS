@@ -7,7 +7,11 @@ export function TrustBar({ user = null }: { user?: { firstName: string; isAdmin?
   return (
     <div className="bg-brand-950 text-brand-100">
       <div className="shell flex h-9 items-center justify-between gap-6 text-xs">
-        <ul className="flex min-w-0 gap-5 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <ul
+          // Scrolls sideways on narrow screens, so it must be reachable by keyboard (arrow keys scroll it once focused).
+          tabIndex={0}
+          aria-label="Why shop with us"
+          className="flex min-w-0 gap-5 overflow-x-auto whitespace-nowrap rounded-sm [scrollbar-width:none] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300 [&::-webkit-scrollbar]:hidden">
           {site.trust.map((t) => (
             <li key={t} className="flex items-center gap-1.5">
               <Check className="h-3.5 w-3.5 text-brand-300" aria-hidden />
