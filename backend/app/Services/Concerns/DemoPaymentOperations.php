@@ -7,7 +7,7 @@ namespace MultiSS\Services\Concerns;
 use DomainException;
 use InvalidArgumentException;
 use MultiSS\Core\Request;
-use MultiSS\Providers\DemoPaymentGateway;
+use MultiSS\Integrations\ProviderFactory;
 use MultiSS\Repositories\DemoPaymentRepository;
 use OutOfBoundsException;
 
@@ -84,8 +84,7 @@ trait DemoPaymentOperations
                     $userId
                 );
 
-        $gateway =
-            new DemoPaymentGateway();
+        $gateway = ProviderFactory::demoPayment();
 
         $event =
             $gateway->createEvent(
@@ -166,8 +165,7 @@ trait DemoPaymentOperations
     public function handleDemoWebhook(
         Request $request
     ): array {
-        $gateway =
-            new DemoPaymentGateway();
+        $gateway = ProviderFactory::demoPayment();
 
         $event =
             $gateway
