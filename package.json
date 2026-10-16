@@ -40,5 +40,8 @@
     "tailwindcss": "^3.4.17",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
+  },
+  "overrides": {
+    "mariadb": "3.4.7"
   }
 }
