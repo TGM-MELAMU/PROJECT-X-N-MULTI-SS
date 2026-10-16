@@ -42,6 +42,7 @@
     "typescript": "^5.7.0"
   },
   "overrides": {
-    "mariadb": "3.4.7"
+    "mariadb": "3.5.4",
+    "deepmerge-ts": "8.0.2"
   }
 }
